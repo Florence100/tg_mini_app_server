@@ -6,13 +6,14 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
-const token = process.env.BOT_TOKEN;
-const webAppUrl = process.env.WEB_APP_URL;
-const serverUrl = process.env.SERVER_URL;
-providerToken = process.env.SBERBANK_TOKEN;
 
-const bot = new TelegramBot(token, { webHook: true });
-bot.setWebHook(`${serverUrl}/bot${token}`)
+const botToken      = process.env.BOT_TOKEN;
+const webAppUrl     = process.env.WEB_APP_URL;
+const serverUrl     = process.env.SERVER_URL;
+const providerToken = process.env.SBERBANK_TOKEN;
+
+const bot = new TelegramBot(botToken, { webHook: true });
+bot.setWebHook(`${serverUrl}/bot${botToken}`)
     .then(() => console.log('Webhook установлен!'));
 
 const app = express();
@@ -31,8 +32,10 @@ app.use((req, res, next) => {
     next();
 });
 
+let clients = [];
+
 // Обработчик запросов от Telegram
-app.post(`/bot${token}`, (req, res) => {
+app.post(`/bot${botToken}`, (req, res) => {
     const update = req.body;
     bot.processUpdate(update);
 
@@ -62,8 +65,14 @@ app.post(`/bot${token}`, (req, res) => {
         }
 
         if (message.successful_payment) {
-            console.log('successful_payment')
+            console.log('successful_payment:', message.successful_payment);
             bot.sendMessage(chatId, 'Спасибо за ваш заказ!');
+
+            // Отправка события успешной оплаты всем подключенным клиентам
+            clients.forEach(client => {
+                client.res.write(`event: paymentSuccess\n`);
+                client.res.write(`data: ${JSON.stringify({ chatId })}\n\n`);
+            });
         }
     }
 
@@ -85,12 +94,14 @@ app.post('/create-invoice', async (req,res) => {
     const window = new JSDOM('').window;
     const DOMPurify = createDOMPurify(window);
 
-    const products       = req.body.productsList;
-    const deliveryOption = req.body.deliveryOption;
-    const deliveryCost   = req.body.deliveryCost;
-    const readyDate      = req.body.readyDate;
-    const readyTime      = req.body.readyTime;
-    const comment        = DOMPurify.sanitize(req.body?.comment) || '';
+    const paymentPayload = req.body?.paymentPayload;
+    const products       = paymentPayload.productsList;
+    const deliveryOption = paymentPayload.deliveryOption;
+    const deliveryCost   = paymentPayload.deliveryCost;
+    const readyDate      = paymentPayload.readyDate;
+    const readyTime      = paymentPayload.readyTime;
+    const comment        = DOMPurify.sanitize(paymentPayload?.comment) || '';
+    // const callbackUrl    = req.body?.callbackUrl;
 
     const pricesData = products.map(product => ({
         label  : `${product.name} × ${product.count}`,
@@ -110,7 +121,6 @@ app.post('/create-invoice', async (req,res) => {
         const invoiceLink = await bot.createInvoiceLink(
             'Данные тестовой карты:',
             '1111 1111 1111 1026 \nСрок действия 12/22 \nCVC 000',
-            // JSON.stringify(payload),
             'custom payload',
             providerToken,
             'RUB',
@@ -129,6 +139,29 @@ app.post('/create-invoice', async (req,res) => {
         res.status(500).send('Ошибка при создании счета');
     }
 })
+
+
+app.get('/sse-endpoint', (req, res) => {
+    console.log('SSE установлен');
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+    });
+
+    const clientId = Date.now();
+    const newClient = {
+        id: clientId,
+        res
+    };
+    clients.push(newClient);
+    console.log(clients)
+
+    req.on('close', () => {
+        clients = clients.filter(client => client.id !== clientId);
+    });
+});
+
 
 const PORT = 8000;
 
