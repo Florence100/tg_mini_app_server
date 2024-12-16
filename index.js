@@ -6,33 +6,27 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
-
 const botToken      = process.env.BOT_TOKEN;
-const webAppUrl     = process.env.WEB_APP_URL;
-const serverUrl     = process.env.SERVER_URL;
 const providerToken = process.env.SBERBANK_TOKEN;
+const webAppUrl     = `https://${process.env.WEB_APP_URL}`;
+const serverUrl     = `https://${process.env.SERVER_URL}`;
 
 const bot = new TelegramBot(botToken, { webHook: true });
-bot.setWebHook(`${serverUrl}/bot${botToken}`)
-    .then(() => console.log('Webhook установлен!'));
+bot.setWebHook(`${serverUrl}/bot${botToken}`).then(() => console.log('Webhook установлен!'));
+
 
 const app = express();
 
 app.use(express.json());
-app.use(cors());
+app.use(cors({ origin: webAppUrl }));
 app.use('/img', express.static(path.join(__dirname, 'img')));
 
 app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     if (req.method === 'OPTIONS') {
         return res.sendStatus(200);
     }
     next();
 });
-
-let clients = [];
 
 // Обработчик запросов от Telegram
 app.post(`/bot${botToken}`, (req, res) => {
@@ -43,12 +37,13 @@ app.post(`/bot${botToken}`, (req, res) => {
 
     if (message) {
         const chatId = message.chat.id;
+        // console.log('chatId: ', chatId)
         const text = message.text;
 
         if (text === '/start') {
             bot.sendMessage(
                 chatId, 
-                '<b>Давай начнем &#127828;</b>\n\nПожалуйста, нажми на кнопку ниже, чтобы заказать свой лучший обед!',
+                '<b>Приступим?</b>\n\nНажми на кнопку &#10549;',
                 {
                     parse_mode: 'HTML',
                     reply_markup: {
@@ -64,16 +59,30 @@ app.post(`/bot${botToken}`, (req, res) => {
             })
         }
 
-        if (message.successful_payment) {
-            console.log('successful_payment:', message.successful_payment);
-            bot.sendMessage(chatId, 'Спасибо за ваш заказ!');
+        // if (message.successful_payment) {
+        //     console.log('message.successful_payment: ', message.successful_payment)
+        //     const invoiceId = message.successful_payment.invoice_payload;
+        //     const orderDetails = currentOpenInvoices[invoiceId];
 
-            // Отправка события успешной оплаты всем подключенным клиентам
-            clients.forEach(client => {
-                client.res.write(`event: paymentSuccess\n`);
-                client.res.write(`data: ${JSON.stringify({ chatId })}\n\n`);
-            });
-        }
+        //     const deliveryOption = orderDetails?.deliveryOption;
+        //     const readyDate = orderDetails?.readyDate;
+        //     const formattedDate = dateConvert(readyDate);
+        //     const readyTime = orderDetails?.readyTime;
+        //     const address = orderDetails?.address;
+
+        //     let messageToUser;
+
+        //     if (deliveryOption === 'pickup') {
+        //         messageToUser = `Оплата прошла успешно! ⬆️\n\nВаш заказ будет готов ${formattedDate} в промежуток времени ${readyTime} \nСпасибо, что выбираете нас!`;
+        //     } else if (deliveryOption === 'delivery') {
+        //         messageToUser = `Оплата прошла успешно! ⬆️\n\nВаш заказ будет доставлен ${formattedDate} по адресу ${address} в промежуток времени ${readyTime}  \nСпасибо, что выбираете нас!`;
+        //     }
+
+        //     bot.sendMessage(chatId, messageToUser);
+        //     // delete currentOpenInvoices[invoiceId];
+
+        //     // console.log('currentOpenInvoices after delete: ', currentOpenInvoices);
+        // }
     }
 
     if (update.pre_checkout_query) {
@@ -89,19 +98,21 @@ app.post(`/bot${botToken}`, (req, res) => {
     res.sendStatus(200);
 });
 
+const currentOpenInvoices = {};
 
 app.post('/create-invoice', async (req,res) => {
     const window = new JSDOM('').window;
     const DOMPurify = createDOMPurify(window);
 
     const paymentPayload = req.body?.paymentPayload;
-    const products       = paymentPayload.productsList;
+    const userId         = paymentPayload.userId;
+    const products       = paymentPayload.cartItems;
     const deliveryOption = paymentPayload.deliveryOption;
     const deliveryCost   = paymentPayload.deliveryCost;
     const readyDate      = paymentPayload.readyDate;
     const readyTime      = paymentPayload.readyTime;
+    const address        = DOMPurify.sanitize(paymentPayload?.address) || '';
     const comment        = DOMPurify.sanitize(paymentPayload?.comment) || '';
-    // const callbackUrl    = req.body?.callbackUrl;
 
     const pricesData = products.map(product => ({
         label  : `${product.name} × ${product.count}`,
@@ -112,16 +123,19 @@ app.post('/create-invoice', async (req,res) => {
         pricesData.push(
             { 
                 label : 'Доставка курьером', 
-                amount: deliveryCost === 0 ? 'Бесплатно' : +(deliveryCost * 100).toFixed(2)
+                amount: deliveryCost === 0 ? 0 : +(deliveryCost * 100).toFixed(2)
             }
         );
     }
 
     try {
+        const currentDate = Date.now();
+        const invoiceId = `${userId}-${currentDate}`;
+
         const invoiceLink = await bot.createInvoiceLink(
-            'Данные тестовой карты:',
-            '1111 1111 1111 1026 \nСрок действия 12/22 \nCVC 000',
-            'custom payload',
+            'Данные тестовой карты:', //title
+            '6390 0200 0000 000003 \nСрок действия 2024/12 CVC 123 \nКод 3-D Secure 12345678 ', //description
+            invoiceId, //payload
             providerToken,
             'RUB',
             pricesData,
@@ -129,10 +143,21 @@ app.post('/create-invoice', async (req,res) => {
                 need_name             : true,
                 need_phone_number     : true,
                 photo_url             : `${serverUrl}/img/burger_small.png`,
-                // need_shipping_address : deliveryOption === 'delivery',
-                // is_flexible           : deliveryOption === 'delivery',
             }
         );
+
+        const slug = invoiceLink.split('/').pop().replace('$', '');
+
+        currentOpenInvoices[slug] = {
+            deliveryOption: deliveryOption,
+            readyDate: readyDate,
+            readyTime: readyTime,
+            address: address,
+        }
+
+        console.log('currentOpenInvoices: ', currentOpenInvoices);
+        // console.log('invoiceLink: ', invoiceLink);
+
         res.json({ invoiceLink });
     } catch (error) {
         console.error('Ошибка при создании счета:', error);
@@ -141,27 +166,52 @@ app.post('/create-invoice', async (req,res) => {
 })
 
 
-app.get('/sse-endpoint', (req, res) => {
-    console.log('SSE установлен');
-    res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive'
-    });
+app.post('/delete-invoice', async (req, res) => {
+    const slug   = req.body?.slug;
+    const status = req.body?.status;
+    const chatId = req.body?.chatId;
 
-    const clientId = Date.now();
-    const newClient = {
-        id: clientId,
-        res
-    };
-    clients.push(newClient);
-    console.log(clients)
+    console.log('chatId: ', chatId)
 
-    req.on('close', () => {
-        clients = clients.filter(client => client.id !== clientId);
-    });
-});
+    if (status === 'paid') {
+        const orderDetails = currentOpenInvoices[slug];
+        const deliveryOption = orderDetails?.deliveryOption;
+        const readyDate = orderDetails?.readyDate;
+        const formattedDate = dateConvert(readyDate);
+        const readyTime = orderDetails?.readyTime;
+        const address = orderDetails?.address;
 
+        let messageToUser;
+
+        if (deliveryOption === 'pickup') {
+            messageToUser = `Оплата прошла успешно! ⬆️\n\nВаш заказ будет готов ${formattedDate} в промежуток времени ${readyTime} \nСпасибо, что выбираете нас!`;
+        } else if (deliveryOption === 'delivery') {
+            messageToUser = `Оплата прошла успешно! ⬆️\n\nВаш заказ будет доставлен ${formattedDate} по адресу ${address} в промежуток времени ${readyTime}  \nСпасибо, что выбираете нас!`;
+        }
+
+        console.log(messageToUser)
+
+        bot.sendMessage(chatId, messageToUser);
+
+        delete currentOpenInvoices[slug];
+        console.log('currentOpenInvoices after delete: ', currentOpenInvoices);
+    } else if (status === 'failed' || status === 'cancelled') {
+        delete currentOpenInvoices[slug];
+        console.log('currentOpenInvoices after delete: ', currentOpenInvoices);
+    }
+
+    res.sendStatus(200);
+})
+
+function dateConvert(isoDate) {
+    const date = new Date(isoDate);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0'); // Месяцы в JavaScript начинаются с 0
+    const year = date.getFullYear();
+    const formattedDate = `${day}.${month}.${year}`;
+
+    return formattedDate;
+}
 
 const PORT = 8000;
 
