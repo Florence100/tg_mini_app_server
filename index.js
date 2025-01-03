@@ -189,8 +189,6 @@ app.post('/delete-invoice', async (req, res) => {
             messageToUser = `Оплата прошла успешно! ⬆️\n\nВаш заказ будет доставлен ${formattedDate} по адресу ${address} в промежуток времени ${readyTime}  \nСпасибо, что выбираете нас!`;
         }
 
-        console.log(messageToUser)
-
         bot.sendMessage(chatId, messageToUser);
 
         delete currentOpenInvoices[slug];
