@@ -18,7 +18,12 @@ bot.setWebHook(`${serverUrl}/bot${botToken}`).then(() => console.log('Webhook у
 const app = express();
 
 app.use(express.json());
-app.use(cors({ origin: webAppUrl }));
+app.use(cors({
+    origin: webAppUrl,
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type'],
+}));
+app.options('*', cors());
 app.use('/img', express.static(path.join(__dirname, 'img')));
 
 app.use((req, res, next) => {
@@ -37,7 +42,6 @@ app.post(`/bot${botToken}`, (req, res) => {
 
     if (message) {
         const chatId = message.chat.id;
-        // console.log('chatId: ', chatId)
         const text = message.text;
 
         if (text === '/start') {
@@ -155,7 +159,7 @@ app.post('/create-invoice', async (req,res) => {
             address: address,
         }
 
-        console.log('currentOpenInvoices: ', currentOpenInvoices);
+        // console.log('currentOpenInvoices: ', currentOpenInvoices);
         // console.log('invoiceLink: ', invoiceLink);
 
         res.json({ invoiceLink });
