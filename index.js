@@ -14,6 +14,13 @@ const serverUrl     = `https://${process.env.SERVER_URL}`;
 const bot = new TelegramBot(botToken, { webHook: true });
 bot.setWebHook(`${serverUrl}/bot${botToken}`).then(() => console.log('Webhook установлен!'));
 
+// const bot = new TelegramBot(botToken, { polling: true });
+// bot.deleteWebHook()
+//    .then(() => {
+//       console.log('Webhook удалён. Переходим к Polling.');
+//       bot.startPolling();
+//    })
+//    .catch((err) => console.error('Ошибка при удалении Webhook:', err));
 
 const app = express();
 
@@ -31,6 +38,10 @@ app.use((req, res, next) => {
         return res.sendStatus(200);
     }
     next();
+});
+
+app.get('/', (req, res) => {
+    res.send('Сервер работает!');
 });
 
 // Обработчик запросов от Telegram
