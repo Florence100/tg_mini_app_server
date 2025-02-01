@@ -7,20 +7,48 @@ const path = require('path');
 require('dotenv').config();
 
 const botToken      = process.env.BOT_TOKEN;
-const providerToken = process.env.SBERBANK_TOKEN;
+const providerToken = process.env.PROVIDER_TOKEN;
 const webAppUrl     = `https://${process.env.WEB_APP_URL}`;
 const serverUrl     = `https://${process.env.SERVER_URL}`;
 
-const bot = new TelegramBot(botToken, { webHook: true });
-bot.setWebHook(`${serverUrl}/bot${botToken}`).then(() => console.log('Webhook установлен!'));
+const bot = new TelegramBot(botToken, {polling: true});
+// bot.setWebHook(`${serverUrl}/bot${botToken}`).then(() => console.log('Webhook установлен!'));
 
-// const bot = new TelegramBot(botToken, { polling: true });
-// bot.deleteWebHook()
-//    .then(() => {
-//       console.log('Webhook удалён. Переходим к Polling.');
-//       bot.startPolling();
-//    })
-//    .catch((err) => console.error('Ошибка при удалении Webhook:', err));
+bot.on('message', async (message) => {
+    console.log('message', message)
+    const chatId = message.chat.id;
+    const text = message.text;
+
+    if (text === '/start') {
+        bot.sendMessage(
+            chatId,
+            '<b>Приступим?</b>\n\nНажми на кнопку &#10549;',
+            {
+                parse_mode: 'HTML',
+                reply_markup: {
+                    inline_keyboard: [
+                        [{text: 'Открыть', web_app: {url: webAppUrl}}],
+                    ],
+                }
+            }
+        )
+        .catch((error) => {
+            console.log(error);
+            throw error;
+        })
+    }
+})
+
+bot.on('pre_checkout_query', (query) => {
+    bot.answerPreCheckoutQuery(query.id, true)
+        .then(() => {
+            console.log('Pre-checkout query confirmed');
+        })
+        .catch((error) => {
+            console.error('Error confirming pre-checkout query:', error);
+        });
+})
+
 
 const app = express();
 
@@ -30,88 +58,66 @@ app.use(cors({
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type'],
 }));
-app.options('*', cors());
-app.use('/img', express.static(path.join(__dirname, 'img')));
 
-app.use((req, res, next) => {
-    if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
-    }
-    next();
-});
+// app.use((req, res, next) => {
+//     if (req.method === 'OPTIONS') {
+//         console.log('options')
+//         return res.sendStatus(200);
+//     }
+//     next();
+// });
+
+app.use('/img', express.static(path.join(__dirname, 'img')));
 
 app.get('/', (req, res) => {
     res.send('Сервер работает!');
 });
 
-// Обработчик запросов от Telegram
-app.post(`/bot${botToken}`, (req, res) => {
-    const update = req.body;
-    bot.processUpdate(update);
+// // Обработчик запросов от Telegram
+// app.post(`/bot${botToken}`, (req, res) => {
+//     const update = req.body;
+//     console.log('update:', update);
+//     bot.processUpdate(update);
 
-    const message = update?.message;
+//     const message = update?.message;
 
-    if (message) {
-        const chatId = message.chat.id;
-        const text = message.text;
+//     if (message) {
+//         const chatId = message.chat.id;
+//         const text = message.text;
 
-        if (text === '/start') {
-            bot.sendMessage(
-                chatId, 
-                '<b>Приступим?</b>\n\nНажми на кнопку &#10549;',
-                {
-                    parse_mode: 'HTML',
-                    reply_markup: {
-                        inline_keyboard: [
-                            [{text: 'Открыть', web_app: {url: webAppUrl}}],
-                        ],
-                    }
-                }
-            )
-            .catch((error) => {
-                console.log(error);
-                throw error;
-            })
-        }
+//         if (text === '/start') {
+//             bot.sendMessage(
+//                 chatId, 
+//                 '<b>Приступим?</b>\n\nНажми на кнопку &#10549;',
+//                 {
+//                     parse_mode: 'HTML',
+//                     reply_markup: {
+//                         inline_keyboard: [
+//                             [{text: 'Открыть', web_app: {url: webAppUrl}}],
+//                         ],
+//                     }
+//                 }
+//             )
+//             .catch((error) => {
+//                 console.log(error);
+//                 throw error;
+//             })
+//         }
+//     }
 
-        // if (message.successful_payment) {
-        //     console.log('message.successful_payment: ', message.successful_payment)
-        //     const invoiceId = message.successful_payment.invoice_payload;
-        //     const orderDetails = currentOpenInvoices[invoiceId];
+//     if (update.pre_checkout_query) {
+//         bot.answerPreCheckoutQuery(update.pre_checkout_query.id, true)
+//             .then(() => {
+//                 console.log('Pre-checkout query confirmed');
+//             })
+//             .catch((error) => {
+//                 console.error('Error confirming pre-checkout query:', error);
+//             });
+//     }
 
-        //     const deliveryOption = orderDetails?.deliveryOption;
-        //     const readyDate = orderDetails?.readyDate;
-        //     const formattedDate = dateConvert(readyDate);
-        //     const readyTime = orderDetails?.readyTime;
-        //     const address = orderDetails?.address;
+//     res.sendStatus(200);
+// });
 
-        //     let messageToUser;
-
-        //     if (deliveryOption === 'pickup') {
-        //         messageToUser = `Оплата прошла успешно! ⬆️\n\nВаш заказ будет готов ${formattedDate} в промежуток времени ${readyTime} \nСпасибо, что выбираете нас!`;
-        //     } else if (deliveryOption === 'delivery') {
-        //         messageToUser = `Оплата прошла успешно! ⬆️\n\nВаш заказ будет доставлен ${formattedDate} по адресу ${address} в промежуток времени ${readyTime}  \nСпасибо, что выбираете нас!`;
-        //     }
-
-        //     bot.sendMessage(chatId, messageToUser);
-        //     // delete currentOpenInvoices[invoiceId];
-
-        //     // console.log('currentOpenInvoices after delete: ', currentOpenInvoices);
-        // }
-    }
-
-    if (update.pre_checkout_query) {
-        bot.answerPreCheckoutQuery(update.pre_checkout_query.id, true)
-            .then(() => {
-                console.log('Pre-checkout query confirmed');
-            })
-            .catch((error) => {
-                console.error('Error confirming pre-checkout query:', error);
-            });
-    }
-
-    res.sendStatus(200);
-});
 
 const currentOpenInvoices = {};
 
@@ -170,9 +176,6 @@ app.post('/create-invoice', async (req,res) => {
             address: address,
         }
 
-        // console.log('currentOpenInvoices: ', currentOpenInvoices);
-        // console.log('invoiceLink: ', invoiceLink);
-
         res.json({ invoiceLink });
     } catch (error) {
         console.error('Ошибка при создании счета:', error);
@@ -186,31 +189,32 @@ app.post('/delete-invoice', async (req, res) => {
     const status = req.body?.status;
     const chatId = req.body?.chatId;
 
-    console.log('chatId: ', chatId)
+    try {
+        if (status === 'paid') {
+            const orderDetails = currentOpenInvoices[slug];
+            const deliveryOption = orderDetails?.deliveryOption;
+            const readyDate = orderDetails?.readyDate;
+            const formattedDate = dateConvert(readyDate);
+            const readyTime = orderDetails?.readyTime;
+            const address = orderDetails?.address;
 
-    if (status === 'paid') {
-        const orderDetails = currentOpenInvoices[slug];
-        const deliveryOption = orderDetails?.deliveryOption;
-        const readyDate = orderDetails?.readyDate;
-        const formattedDate = dateConvert(readyDate);
-        const readyTime = orderDetails?.readyTime;
-        const address = orderDetails?.address;
+            let messageToUser;
 
-        let messageToUser;
+            if (deliveryOption === 'pickup') {
+                messageToUser = `Оплата прошла успешно! ⬆️\n\nВаш заказ будет готов ${formattedDate} в промежуток времени ${readyTime} \nСпасибо, что выбираете нас!`;
+            } else if (deliveryOption === 'delivery') {
+                messageToUser = `Оплата прошла успешно! ⬆️\n\nВаш заказ будет доставлен ${formattedDate} по адресу ${address} в промежуток времени ${readyTime}  \nСпасибо, что выбираете нас!`;
+            }
 
-        if (deliveryOption === 'pickup') {
-            messageToUser = `Оплата прошла успешно! ⬆️\n\nВаш заказ будет готов ${formattedDate} в промежуток времени ${readyTime} \nСпасибо, что выбираете нас!`;
-        } else if (deliveryOption === 'delivery') {
-            messageToUser = `Оплата прошла успешно! ⬆️\n\nВаш заказ будет доставлен ${formattedDate} по адресу ${address} в промежуток времени ${readyTime}  \nСпасибо, что выбираете нас!`;
+            bot.sendMessage(chatId, messageToUser);
+
+            delete currentOpenInvoices[slug];
+        } else if (status === 'failed' || status === 'cancelled') {
+            delete currentOpenInvoices[slug];
         }
-
-        bot.sendMessage(chatId, messageToUser);
-
-        delete currentOpenInvoices[slug];
-        console.log('currentOpenInvoices after delete: ', currentOpenInvoices);
-    } else if (status === 'failed' || status === 'cancelled') {
-        delete currentOpenInvoices[slug];
-        console.log('currentOpenInvoices after delete: ', currentOpenInvoices);
+    } catch (e) {
+        console.log(e);
+        throw new Error(e);
     }
 
     res.sendStatus(200);
@@ -226,7 +230,7 @@ function dateConvert(isoDate) {
     return formattedDate;
 }
 
-const PORT = 8000;
+const PORT = 8001;
 
 app.listen(PORT, () => console.log('Server started on PORT ' + PORT));
 
