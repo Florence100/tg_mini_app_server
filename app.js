@@ -19,6 +19,8 @@ app.use(cors({
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 app.use('/', router);
 
 app.listen(PORT, () => console.log('Server started on PORT ' + PORT));

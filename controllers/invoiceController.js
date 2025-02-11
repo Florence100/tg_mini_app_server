@@ -117,4 +117,4 @@ function dateConvert(isoDate) {
     return formattedDate;
 }
 
-module.exports = new InvoiceController()
+module.exports = new InvoiceController();
