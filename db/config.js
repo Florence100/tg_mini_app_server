@@ -1,7 +1,9 @@
+require('dotenv').config();
+
 module.exports = {
-    host: '127.0.0.1',
-    user: 'root',
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
     password: '',
-    database: 'tg_bot',
-    port: 3306
+    database: process.env.DB_NAME,
+    port: process.env.DB_PORT
 }

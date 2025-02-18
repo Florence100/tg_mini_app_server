@@ -3,12 +3,13 @@ const { JSDOM } = require('jsdom');
 const createDOMPurify = require('dompurify');
 const providerToken = process.env.PROVIDER_TOKEN;
 const serverUrl = `https://${process.env.SERVER_URL}`;
+const ApiError = require('../error/ApiError');
 
 const currentOpenInvoices = {};
 
 
 class InvoiceController {
-    async add(req, res) {
+    async add(req, res, next) {
         const window = new JSDOM('').window;
         const DOMPurify = createDOMPurify(window);
 
@@ -39,7 +40,6 @@ class InvoiceController {
         try {
             const currentDate = Date.now();
             const invoiceId = `${userId}-${currentDate}`;
-            console.log(`${serverUrl}/public/img/burger_small.png`)
 
             const invoiceLink = await bot.createInvoiceLink(
                 'Данные тестовой карты:', //title
@@ -65,9 +65,8 @@ class InvoiceController {
             }
 
             res.json({ invoiceLink });
-        } catch (error) {
-            console.error('Ошибка при создании счета:', error);
-            res.status(500).send('Ошибка при создании счета');
+        } catch (e) {
+            next(ApiError.internal(e.message));
         }
     }
 
@@ -99,8 +98,7 @@ class InvoiceController {
                 delete currentOpenInvoices[slug];
             }
         } catch (e) {
-            console.log(e);
-            throw new Error(e);
+            next(ApiError.internal(e.message));
         }
 
         res.sendStatus(200);

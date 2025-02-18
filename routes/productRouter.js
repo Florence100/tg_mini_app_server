@@ -4,7 +4,6 @@ const path = require('path');
 const productController = require('../controllers/productController');
 
 const router = express.Router();
-// const upload = multer({ dest: 'uploads/' });
 
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
