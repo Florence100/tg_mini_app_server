@@ -35,8 +35,8 @@ const authMiddleware = function (req, res, next) {
                 if (e.message.includes('\"hash\" parameter is missing')) {
                     return next(ApiError.forbidden('Ошибка авторизации. Пожалуйста, обновите страницу и попробуйте снова.'));
                 }
-                if (e.message.includes('Init data has expired')) {
-                    return next(ApiError.forbidden('Данные инициализации истекли. Пожалуйста, выполните вход снова.'));
+                if (e.message.includes('Init data expired')) {
+                    return next(ApiError.forbidden('Данные инициализации истекли. Пожалуйста, закройте приложение и выполните вход снова.'));
                 }
                 return next(ApiError.forbidden(e.message));
             }
@@ -54,4 +54,4 @@ const showInitDataMiddleware = function(_req, res, next) {
     res.json(initData);
 };
 
-module.exports = { authMiddleware, showInitDataMiddleware };
+module.exports = { authMiddleware, showInitDataMiddleware, getInitData };

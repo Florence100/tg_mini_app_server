@@ -86,9 +86,9 @@ class InvoiceController {
                 let messageToUser;
 
                 if (deliveryOption === 'pickup') {
-                    messageToUser = `Оплата прошла успешно! ⬆️\n\nВаш заказ будет готов ${formattedDate} в промежуток времени ${readyTime} \nСпасибо, что выбираете нас!`;
+                    messageToUser = `Оплата прошла успешно! Ваш чек здесь ⬆️\n\nВаш заказ будет готов ${formattedDate} в промежуток времени ${readyTime} \nСпасибо, что выбираете нас!`;
                 } else if (deliveryOption === 'delivery') {
-                    messageToUser = `Оплата прошла успешно! ⬆️\n\nВаш заказ будет доставлен ${formattedDate} по адресу ${address} в промежуток времени ${readyTime}  \nСпасибо, что выбираете нас!`;
+                    messageToUser = `Оплата прошла успешно! Ваш чек здесь ⬆️\n\nВаш заказ будет доставлен ${formattedDate} по адресу ${address} в промежуток времени ${readyTime}  \nСпасибо, что выбираете нас!`;
                 }
 
                 bot.sendMessage(chatId, messageToUser);

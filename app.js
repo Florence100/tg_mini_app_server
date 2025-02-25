@@ -14,7 +14,7 @@ const app = express();
 app.use(express.json());
 app.use(cors({
     origin: WEB_APP_URL,
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'POST', 'OPTIONS', 'DELETE', 'PUT'],
     allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 app.use(express.static(path.join(__dirname, 'public')));

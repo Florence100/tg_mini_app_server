@@ -29,6 +29,47 @@ class ProductController {
         }
     }
 
+    async getBasketProducts (req, res, next) {
+        try {
+            
+        } catch(e) {
+            next(ApiError.internal(e.message));
+        }
+    }
+
+    // async getProducts (req, res, next) {
+    //     const productIds = req.query.productIds;
+
+    //     if (!productIds) {
+    //         return res.status(400).json({ error: 'Отсутствуют идентификаторы продуктов' });
+    //     }
+
+    //     const placeholders = productIds.map(() => '?').join(',');
+    //     const query = `
+    //         SELECT 
+    //             product.id,
+    //             product.name,
+    //             product.price,
+    //             image.img_path AS img
+    //         FROM 
+    //             product
+    //         JOIN 
+    //             image ON product.id = image.product_id
+    //         WHERE 
+    //             product.id IN (${placeholders})
+    //         `;
+
+    //     try {
+    //         const connection = await mysql.createConnection(CONFIG);
+    //         const [rows] = await connection.execute(query, productIds);
+    //         await connection.end();
+            
+    //         res.json(rows);
+    //     } catch (e) {
+    //         next(ApiError.internal('Ошибка сервера'));
+    //     }
+    // }
+
     async uploadProduct(req, res, next) {
         try {
             const connection = await mysql.createConnection(CONFIG);
