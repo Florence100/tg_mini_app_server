@@ -4,7 +4,7 @@ module.exports = {
             p.id,
             p.name,
             p.price,
-            i.img_path
+            i.img_path AS img
         FROM
             product AS p
         LEFT OUTER JOIN
@@ -17,7 +17,16 @@ module.exports = {
 
     get_one_product: `
         SELECT
-            *
+            p.id,
+            p.name,
+            p.price,
+            p.description,
+            p.weight,
+            p.proteins,
+            p.fats,
+            p.carbohydrates,
+            p.calorie,
+            i.img_path AS img
         FROM
             product AS p
         LEFT OUTER JOIN
@@ -32,7 +41,6 @@ module.exports = {
         INSERT INTO product
         (
             name,
-            actually,
             price,
             description,
             proteins,
@@ -41,18 +49,7 @@ module.exports = {
             calorie,
             weight
         ) 
-        VALUES 
-        (
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            ?
-        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `,
 
     find_user: `
@@ -73,14 +70,7 @@ module.exports = {
             last_name,
             photo_url
         )
-        VALUES
-        (
-            ?,
-            ?,
-            ?,
-            ?,
-            ?
-        )
+        VALUES (?, ?, ?, ?, ?)
     `,
 
     assign_role: `
@@ -89,8 +79,7 @@ module.exports = {
             user_id,
             role_id
         ) 
-        VALUES
-            (?, ?)
+        VALUES(?, ?)
     `,
 
     select_role: `
@@ -105,8 +94,7 @@ module.exports = {
     basket_create: `
         INSERT INTO basket
             (user_id)
-        VALUES
-            (?)
+        VALUES(?)
     `,
 
     basket_find: `
@@ -133,12 +121,7 @@ module.exports = {
             product_id,
             count
         )
-        VALUES
-        (
-            ?,
-            ?,
-            ?
-        )
+        VALUES(?, ?, ?)
     `,
 
     basket_product_remove: `
@@ -191,5 +174,94 @@ module.exports = {
             i.product_id = p.id 
         WHERE 
             bp.basket_id = ?
-    `
+    `,
+
+    order_create: `
+        INSERT INTO orders (
+            user_id,
+            delivery,
+            delivery_cost,
+            ready_date,
+            ready_time,
+            address,
+            comment
+        ) 
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    `,
+
+    order_delete: `
+        DELETE FROM orders
+        WHERE id = ?
+    `,
+
+    order_status_update: `
+        UPDATE
+            orders
+        SET
+            status = ?
+        WHERE
+            id = ?
+    `,
+
+    order_product_create: `
+        INSERT INTO order_product (
+            order_id,
+            product_id,
+            name,
+            price,
+            count
+        )
+        VALUES ?
+    `,
+
+    order_info_get: `
+        SELECT
+            o.delivery AS deliveryOption,
+            o.delivery_cost AS deliveryCost,
+            o.ready_date AS readyDate,
+            o.ready_time AS readyTime,
+            o.address,
+            o.comment
+        FROM
+            orders AS o
+        WHERE
+            o.id = ?
+    `,
+
+    order_products_get: `
+        SELECT
+            op.count,
+            p.name,
+            p.price
+        FROM
+            orders AS o
+        LEFT OUTER JOIN 
+            order_product AS op
+        ON 
+            o.id = op.order_id
+        LEFT OUTER JOIN 
+            product AS p 
+        ON 
+            p.id = op.product_id
+        WHERE 
+            o.id = ?
+    `,
+
+    invoice_create: `
+        INSERT INTO invoice (
+            order_id,
+            slug,
+            status
+        ) 
+        VALUES (?, ?, ?)
+    `,
+
+    invoice_status_update: `
+        UPDATE
+            invoice
+        SET
+            status = ?
+        WHERE
+            slug = ?
+    `,
 }

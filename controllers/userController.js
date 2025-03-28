@@ -12,6 +12,8 @@ class UserController {
             const connection = await mysql.createConnection(CONFIG);
             const [rows] = await connection.execute(Q.find_user, [userData.id]);
 
+            console.log('isUserInBase', rows.length)
+
             if (rows.length === 0) {
                 await connection.execute(
                     Q.create_user,
@@ -22,8 +24,8 @@ class UserController {
                     Q.select_role,
                     ['user']
                 );
-                const roleId = roleRows[0].id;
 
+                const roleId = roleRows[0].id;
                 await connection.execute(
                     Q.assign_role,
                     [userData.id, roleId]
@@ -35,7 +37,7 @@ class UserController {
                 );
             }
             await connection.end();
-            res.json(userData);
+            res.status(200).json(userData);
         } catch (e) {
             next(ApiError.forbidden(e.message));
         }

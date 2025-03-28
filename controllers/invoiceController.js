@@ -1,43 +1,40 @@
 const { bot } = require('../bot');
 const { JSDOM } = require('jsdom');
-const createDOMPurify = require('dompurify');
+const { getInitData } = require('../middleware/authMiddleware');
+const ApiError = require('../error/ApiError');
+const mysql = require('mysql2/promise');
+const CONFIG = require('../db/config');
+const Q = require('../db/queries');
+
 const providerToken = process.env.PROVIDER_TOKEN;
 const serverUrl = `https://${process.env.SERVER_URL}`;
-const ApiError = require('../error/ApiError');
-
-const currentOpenInvoices = {};
-
 
 class InvoiceController {
-    async add(req, res, next) {
-        const window = new JSDOM('').window;
-        const DOMPurify = createDOMPurify(window);
-
-        const paymentPayload = req.body?.paymentPayload;
-        const userId         = paymentPayload.userId;
-        const products       = paymentPayload.cartItems;
-        const deliveryOption = paymentPayload.deliveryOption;
-        const deliveryCost   = paymentPayload.deliveryCost;
-        const readyDate      = paymentPayload.readyDate;
-        const readyTime      = paymentPayload.readyTime;
-        const address        = DOMPurify.sanitize(paymentPayload?.address) || '';
-        const comment        = DOMPurify.sanitize(paymentPayload?.comment) || '';
-
-        const pricesData = products.map(product => ({
-            label  : `${product.name} × ${product.count}`,
-            amount : +(product.price * product.count * 100).toFixed(2),
-        }))
-
-        if (deliveryOption === 'delivery') {
-            pricesData.push(
-                { 
-                    label : 'Доставка курьером', 
-                    amount: deliveryCost === 0 ? 0 : +(deliveryCost * 100).toFixed(2)
-                }
-            );
-        }
+    async create(req, res, next) {
+        const initData = getInitData(res);
+        const userId = initData.user.id;
+        const orderId = req.body.orderId;
 
         try {
+            const connection = await mysql.createConnection(CONFIG);
+            const [orderInfo] = await connection.execute(Q.order_info_get, [orderId]);
+            const [orderProducts] = await connection.execute(Q.order_products_get, [orderId]);
+            const { deliveryOption, deliveryCost } = orderInfo[0];
+
+            const pricesData = orderProducts.map(product => ({
+                label  : `${product.name} × ${product.count}`,
+                amount : +(product.price * product.count * 100).toFixed(2),
+            }))
+
+            if (deliveryOption === 'delivery') {
+                pricesData.push(
+                    {
+                        label : 'Доставка курьером',
+                        amount: deliveryCost === 0 ? 0 : +(deliveryCost * 100).toFixed(2)
+                    }
+                );
+            }
+
             const currentDate = Date.now();
             const invoiceId = `${userId}-${currentDate}`;
 
@@ -56,33 +53,29 @@ class InvoiceController {
             );
 
             const slug = invoiceLink.split('/').pop().replace('$', '');
-
-            currentOpenInvoices[slug] = {
-                deliveryOption: deliveryOption,
-                readyDate: readyDate,
-                readyTime: readyTime,
-                address: address,
-            }
-
-            res.json({ invoiceLink });
+            await connection.execute(Q.invoice_create, [orderId, slug, 'pending']);
+            res.status(200).json({ invoiceLink });
         } catch (e) {
             next(ApiError.internal(e.message));
         }
     }
 
-    async delete(req, res) {
-        const slug   = req.body?.slug;
-        const status = req.body?.status;
-        const chatId = req.body?.chatId;
+    async update(req, res) {
+        const initData = getInitData(res);
+        const userId   = initData.user.id;
+        const slug     = req.body?.slug;
+        const status   = req.body?.status;
 
         try {
+            const connection = await mysql.createConnection(CONFIG);
+            const getOrderIdQuery = `SELECT order_id AS orderId FROM invoice WHERE invoice.slug = ?`;
+            const [rows] = await connection.execute(getOrderIdQuery, [slug]);
+            const orderId = rows[0].orderId;
+
             if (status === 'paid') {
-                const orderDetails = currentOpenInvoices[slug];
-                const deliveryOption = orderDetails?.deliveryOption;
-                const readyDate = orderDetails?.readyDate;
+                const [orderInfo] = await connection.execute(Q.order_info_get, [orderId]);
+                const { deliveryOption, readyDate, readyTime, address } = orderInfo[0];
                 const formattedDate = dateConvert(readyDate);
-                const readyTime = orderDetails?.readyTime;
-                const address = orderDetails?.address;
                 let messageToUser;
 
                 if (deliveryOption === 'pickup') {
@@ -91,11 +84,13 @@ class InvoiceController {
                     messageToUser = `Оплата прошла успешно! Ваш чек здесь ⬆️\n\nВаш заказ будет доставлен ${formattedDate} по адресу ${address} в промежуток времени ${readyTime}  \nСпасибо, что выбираете нас!`;
                 }
 
-                bot.sendMessage(chatId, messageToUser);
-                delete currentOpenInvoices[slug];
+                await connection.execute(Q.invoice_status_update, [status, slug]);
+                await connection.execute(Q.order_status_update, [status, orderId]);
+                bot.sendMessage(userId, messageToUser);
 
             } else if (status === 'failed' || status === 'cancelled') {
-                delete currentOpenInvoices[slug];
+                await connection.execute(Q.invoice_status_update, [status, slug]);
+                await connection.execute(Q.order_status_update, [status, orderId]);
             }
         } catch (e) {
             next(ApiError.internal(e.message));

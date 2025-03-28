@@ -19,30 +19,30 @@ const authMiddleware = function (req, res, next) {
             try {
                 validate(authData, BOT_TOKEN, {
                     expiresIn: 3600,
+                    // expiresIn: 10,
                 })
                 setInitData(res, parse(authData));
                 return next();
             } catch (e) {
                 if (e.message.includes('Sign is invalid')) {
-                    return next(ApiError.forbidden('Ошибка авторизации. Подпись недействительна. Пожалуйста, обновите страницу и попробуйте снова.'));
+                    return next(ApiError.unauthorized('Ошибка авторизации. Подпись недействительна. Пожалуйста, закройте приложение и выполните вход снова.'));
                 }
                 if (e.message.includes('\"auth_date\" parameter is missing')) {
-                    return next(ApiError.forbidden('Ошибка авторизации. Пожалуйста, обновите страницу и попробуйте снова.'));
+                    return next(ApiError.unauthorized('Ошибка авторизации. Пожалуйста, закройте приложение и выполните вход снова.'));
                 }
                 if (e.message.includes('\"auth_date\" parameter is invalid')) {
-                    return next(ApiError.forbidden('Ошибка авторизации. Пожалуйста, обновите страницу и попробуйте снова.'));
+                    return next(ApiError.unauthorized('Ошибка авторизации. Пожалуйста, закройте приложение и выполните вход снова.'));
                 }
                 if (e.message.includes('\"hash\" parameter is missing')) {
-                    return next(ApiError.forbidden('Ошибка авторизации. Пожалуйста, обновите страницу и попробуйте снова.'));
+                    return next(ApiError.unauthorized('Ошибка авторизации. Пожалуйста, закройте приложение и выполните вход снова.'));
                 }
                 if (e.message.includes('Init data expired')) {
-                    return next(ApiError.forbidden('Данные инициализации истекли. Пожалуйста, закройте приложение и выполните вход снова.'));
+                    return next(ApiError.unauthorized('Данные инициализации истекли. Пожалуйста, закройте приложение и выполните вход снова.'));
                 }
-                return next(ApiError.forbidden(e.message));
+                return next(ApiError.unauthorized(e.message));
             }
-        // ... other authorization methods.
         default:
-            return next(ApiError.unauthorized('Извините, но вы не авторизованы для доступа к этому ресурсу.'));
+            return next(ApiError.unauthorized('Извините, но вы не авторизованы для доступа к этому ресурсу. Пожалуйста, закройте приложение и выполните вход снова.'));
     }
 };
 

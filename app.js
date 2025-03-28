@@ -11,19 +11,25 @@ const PORT = process.env.PORT;
 const WEB_APP_URL = `https://${process.env.WEB_APP_URL}`;
 
 const app = express();
-app.use(express.json());
+
 app.use(cors({
     origin: WEB_APP_URL,
     methods: ['GET', 'POST', 'OPTIONS', 'DELETE', 'PUT'],
     allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+app.options('*', cors());
+
+app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(authMiddleware);
 app.use('/', router);
+
 app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', WEB_APP_URL);
     next(ApiError.notFound('Страница не найдена.'));
 });
+
 app.use(errorHandlingMiddleware);
 
 app.listen(PORT, () => console.log('Server started on PORT ' + PORT));

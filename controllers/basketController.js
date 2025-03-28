@@ -11,9 +11,13 @@ class BasketController {
             const userId = initData.user.id;
             const connection = await mysql.createConnection(CONFIG);
             const [row] = await connection.execute(Q.basket_find, [userId]); //user's basket id
-            const basketId = row[0].id;
-            const [data] = await connection.execute(Q.basket_product_get, [basketId]);
-            res.json(data);
+            const basketId = row[0]?.id;
+            if (basketId) {
+                const [data] = await connection.execute(Q.basket_product_get, [basketId]);
+                res.status(200).json(data);
+            } else {
+                res.status(200);
+            }
             await connection.end();
         } catch (e) {
             next(ApiError.internal(e.message));
@@ -32,7 +36,7 @@ class BasketController {
                 await connection.execute(Q.basket_clear, [basketId]);
             }
             await connection.end();
-            res.send('Basket cleared successfully!');
+            res.status(200).json({ message: 'Basket cleared successfully.' });
         } catch (e) {
             next(ApiError.internal(e.message));
         }
@@ -52,7 +56,7 @@ class BasketController {
                 await connection.execute(Q.basket_product_add, [basketId, productId, count]);
             }
             await connection.end();
-            res.send('Product added successfully!');
+            res.status(200).json({ message: 'Product added successfully.' });
         } catch (e) {
             next(ApiError.internal(e.message));
         }
@@ -71,7 +75,7 @@ class BasketController {
                 await connection.execute(Q.basket_product_remove, [basketId, productId]);
             }
             await connection.end();
-            res.send('Product deleted successfully!');
+            res.status(200).json({ message: 'Product deleted successfully.' });
         } catch (e) {
             next(ApiError.internal(e.message));
         }
@@ -92,7 +96,7 @@ class BasketController {
                 await connection.execute(Q.basket_product_incr, [basketId, productId]);
             }
             await connection.end();
-            res.send('Product update successfully!');
+            res.status(200).json({ message: 'Product update successfully.' });
         } catch (e) {
             next(ApiError.internal(e.message));
         }
@@ -111,7 +115,7 @@ class BasketController {
                 await connection.execute(Q.basket_product_decr, [basketId, productId]);
             }
             await connection.end();
-            res.send('Product update successfully!');
+            res.status(200).json({ message: 'Product update successfully.' });
         } catch (e) {
             next(ApiError.internal(e.message));
         }
