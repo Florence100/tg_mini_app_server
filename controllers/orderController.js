@@ -3,7 +3,6 @@ const CONFIG = require('../db/config');
 const Q = require('../db/queries');
 const ApiError = require('../error/ApiError');
 const { getInitData } = require('../middleware/authMiddleware');
-// const moment = require('moment-timezone');
 
 
 class OrderController {
@@ -14,27 +13,22 @@ class OrderController {
         const readyTime      = req.body.readyTime;
         const address        = req.body.address;
         const comment        = req.body.comment;
-
-        // const formattedReadyDate = moment.tz(readyDate, 'Europe/Moscow').format('YYYY-MM-DD');
+        const cartItems      = req.body.cartItems;
 
         try {
             const initData = getInitData(res);
-            const userId = initData.user.id; 
+            const userId = initData.user.id;
             const connection = await mysql.createConnection(CONFIG);
             const [order] = await connection.query(Q.order_create, [userId, deliveryOption, deliveryCost, readyDate, readyTime, address, comment]);
             const orderId = order.insertId;
-            const [basket] = await connection.execute(Q.basket_find, [userId]);
-            const basketId = basket[0].id;
-            const [basketItems] = await connection.query(Q.basket_product_get, [basketId]);
 
-            const values = basketItems.map(item => [
+            const values = cartItems.map(item => [
                 orderId,
                 item.id,
                 item.name,
                 item.price,
                 item.count
             ]);
-            console.log('values: ', values)
 
             await connection.query(Q.order_product_create, [values]);
 
@@ -45,7 +39,11 @@ class OrderController {
 
             await connection.end();
         } catch (e) {
-            next(ApiError.forbidden(e.message));
+            console.error('error: ', e);
+            if (e.code === 'ECONNREFUSED') {
+                next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, попробуйте оформить заказ еще раз.'));
+            }
+            next(ApiError.unavailable('Сервер не готов обработать запрос в данный момент. Пожалуйста, попробуйте оформить заказ еще раз.'));
         }
     }
 }

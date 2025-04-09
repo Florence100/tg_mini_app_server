@@ -91,90 +91,92 @@ module.exports = {
             role_name = ?
     `,
 
-    basket_create: `
-        INSERT INTO basket
-            (user_id)
-        VALUES(?)
-    `,
+    // basket_create: `
+    //     INSERT INTO basket
+    //         (user_id)
+    //     VALUES(?)
+    // `,
 
-    basket_find: `
-        SELECT
-            id
-        FROM
-            basket
-        WHERE
-            user_id = ?
-        limit 1
-    `,
+    // basket_find: `
+    //     SELECT
+    //         id
+    //     FROM
+    //         basket
+    //     WHERE
+    //         user_id = ?
+    //     limit 1
+    // `,
 
-    basket_clear: `
-        DELETE FROM
-            basket_product
-        WHERE
-            basket_id = ?
-    `,
+    // basket_clear: `
+    //     DELETE FROM
+    //         basket_product
+    //     WHERE
+    //         basket_id = ?
+    // `,
 
-    basket_product_add: `
-        INSERT INTO basket_product
-        (
-            basket_id,
-            product_id,
-            count
-        )
-        VALUES(?, ?, ?)
-    `,
+    // basket_product_add: `
+    //     INSERT INTO basket_product
+    //     (
+    //         basket_id,
+    //         product_id,
+    //         count
+    //     )
+    //     VALUES(?, ?, ?)
+    // `,
 
-    basket_product_remove: `
-        DELETE FROM
-            basket_product
-        WHERE
-            basket_id = ?
-        AND
-            product_id = ?
-    `,
+    // basket_product_remove: `
+    //     DELETE FROM
+    //         basket_product
+    //     WHERE
+    //         basket_id = ?
+    //     AND
+    //         product_id = ?
+    // `,
 
-    basket_product_incr: `
-        UPDATE
-            basket_product
-        SET
-            count = count + 1
-        WHERE
-            basket_id = ?
-        AND
-            product_id = ?
-    `,
+    // basket_product_incr: `
+    //     UPDATE
+    //         basket_product
+    //     SET
+    //         count = count + 1
+    //     WHERE
+    //         basket_id = ?
+    //     AND
+    //         product_id = ?
+    // `,
 
-    basket_product_decr: `
-        UPDATE
-            basket_product
-        SET
-            count = count - 1
-        WHERE
-            basket_id = ?
-        AND
-            product_id = ?
-    `,
+    // basket_product_decr: `
+    //     UPDATE
+    //         basket_product
+    //     SET
+    //         count = count - 1
+    //     WHERE
+    //         basket_id = ?
+    //     AND
+    //         product_id = ?
+    // `,
 
-    basket_product_get: `
-        SELECT 
-            bp.product_id AS id, 
-            bp.count, 
-            p.name, 
-            p.price, 
-            i.img_path AS img
-        FROM 
-            basket_product AS bp 
-        LEFT OUTER JOIN 
-            product AS p 
-        ON 
-            p.id = bp.product_id 
-        LEFT OUTER JOIN 
-            image AS i 
-        ON 
-            i.product_id = p.id 
-        WHERE 
-            bp.basket_id = ?
-    `,
+    // basket_product_get: `
+    //     SELECT 
+    //         bp.product_id AS id, 
+    //         bp.count, 
+    //         p.name, 
+    //         p.price, 
+    //         i.img_path AS img
+    //     FROM 
+    //         basket_product AS bp 
+    //     LEFT OUTER JOIN 
+    //         product AS p 
+    //     ON 
+    //         p.id = bp.product_id 
+    //     LEFT OUTER JOIN 
+    //         image AS i 
+    //     ON 
+    //         i.product_id = p.id 
+    //     WHERE 
+    //         bp.basket_id = ?
+    //     AND 
+    //         p.actually = 1
+    // `,
 
     order_create: `
         INSERT INTO orders (

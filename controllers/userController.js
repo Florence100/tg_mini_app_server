@@ -12,8 +12,6 @@ class UserController {
             const connection = await mysql.createConnection(CONFIG);
             const [rows] = await connection.execute(Q.find_user, [userData.id]);
 
-            console.log('isUserInBase', rows.length)
-
             if (rows.length === 0) {
                 await connection.execute(
                     Q.create_user,
@@ -30,15 +28,11 @@ class UserController {
                     Q.assign_role,
                     [userData.id, roleId]
                 );
-
-                await connection.execute(
-                    Q.basket_create,
-                    [userData.id]
-                );
             }
             await connection.end();
             res.status(200).json(userData);
         } catch (e) {
+            console.error(e);
             next(ApiError.forbidden(e.message));
         }
     }

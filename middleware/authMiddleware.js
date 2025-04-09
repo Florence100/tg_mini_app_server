@@ -19,7 +19,6 @@ const authMiddleware = function (req, res, next) {
             try {
                 validate(authData, BOT_TOKEN, {
                     expiresIn: 3600,
-                    // expiresIn: 10,
                 })
                 setInitData(res, parse(authData));
                 return next();

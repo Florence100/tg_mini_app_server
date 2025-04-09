@@ -21,7 +21,15 @@ app.options('*', cors());
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+    maxAge: '30d',
+    etag: true,
+    lastModified: true,
+    setHeaders: (res, path) => {
+        res.setHeader('Cache-Control', 'public, max-age=2592000'); // 30 дней
+    }
+}));
 app.use(authMiddleware);
 app.use('/', router);
 

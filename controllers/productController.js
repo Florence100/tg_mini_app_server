@@ -12,7 +12,11 @@ class ProductController {
             res.status(200).json(data);
             await connection.end();
         } catch(e) {
-            next(ApiError.internal(e.message));
+            console.error('error: ', e);
+            if (e.code === 'ECONNREFUSED') {
+                next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, закройте приложение и попробуйте еще раз.'));
+            }
+            next(ApiError.notFound('Что-то пошло не так. Страница не найдена.'));
         }
     }
 
@@ -25,7 +29,11 @@ class ProductController {
             res.status(200).json(data);
             await connection.end();
         } catch(e) {
-            next(ApiError.internal(e.message));
+            console.error('error: ', e);
+            if (e.code === 'ECONNREFUSED') {
+                next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, закройте приложение и попробуйте еще раз.'));
+            }
+            next(ApiError.notFound('Что-то пошло не так. Страница не найдена.'));
         }
     }
 
@@ -45,6 +53,7 @@ class ProductController {
             res.send('Product and images uploaded successfully!');
             connection.end();
         } catch (e) {
+            console.error('error: ', e);
             next(ApiError.internal(e.message));
         }
     }

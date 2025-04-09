@@ -48,7 +48,7 @@ class InvoiceController {
                 {
                     need_name         : true,
                     need_phone_number : true,
-                    photo_url         : `${serverUrl}/img/burger_small.png`,
+                    photo_url         : `${serverUrl}/img/macaron-1.png`,
                 }
             );
 
@@ -56,7 +56,11 @@ class InvoiceController {
             await connection.execute(Q.invoice_create, [orderId, slug, 'pending']);
             res.status(200).json({ invoiceLink });
         } catch (e) {
-            next(ApiError.internal(e.message));
+            console.error('error: ', e);
+            if (e.code === 'ECONNREFUSED') {
+                next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, попробуйте оформить заказ еще раз.'));
+            }
+            next(ApiError.unavailable('Сервер не готов обработать запрос в данный момент. Пожалуйста, попробуйте оформить заказ еще раз.'));
         }
     }
 
@@ -93,7 +97,11 @@ class InvoiceController {
                 await connection.execute(Q.order_status_update, [status, orderId]);
             }
         } catch (e) {
-            next(ApiError.internal(e.message));
+            console.error('error: ', e);
+            if (e.code === 'ECONNREFUSED') {
+                next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, попробуйте оформить заказ еще раз.'));
+            }
+            next(ApiError.unavailable('Сервер не готов обработать запрос в данный момент. Пожалуйста, попробуйте оформить заказ еще раз.'));
         }
 
         res.sendStatus(200);
