@@ -15,7 +15,13 @@ class UserController {
             if (rows.length === 0) {
                 await connection.execute(
                     Q.create_user,
-                    [userData.id, userData.first_name, userData?.username, userData?.last_name, userData?.photo_url]
+                    [
+                        userData.id, 
+                        userData.first_name,
+                        userData.username ?? null,
+                        userData.last_name ?? null,
+                        userData.photo_url ?? null
+                    ]
                 );
 
                 const [roleRows] = await connection.execute(
@@ -32,7 +38,7 @@ class UserController {
             await connection.end();
             res.status(200).json(userData);
         } catch (e) {
-            console.error(e);
+            console.error('AuthError: ', e);
             next(ApiError.forbidden(e.message));
         }
     }

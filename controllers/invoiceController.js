@@ -1,5 +1,4 @@
 const { bot } = require('../bot');
-const { JSDOM } = require('jsdom');
 const { getInitData } = require('../middleware/authMiddleware');
 const ApiError = require('../error/ApiError');
 const mysql = require('mysql2/promise');
