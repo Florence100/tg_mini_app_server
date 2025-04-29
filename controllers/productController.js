@@ -3,13 +3,78 @@ const CONFIG = require('../db/config');
 const Q = require('../db/queries');
 const ApiError = require('../error/ApiError');
 
+function dataTransform(data) {
+    return data.map((product) => ({
+        ...product,
+        actually: product.actually === 1,
+        images: product.images 
+            ? product.images.split(';').map((path) => ({ src: path, title: product.name })) 
+            : []
+    }))
+}
+
 class ProductController {
     async getAll (req, res, next) {
         try {
+            const { range } = req.query;
+            const [start, end] = JSON.parse(range);
+
+            const { sort } = req.query;
+            const [field, order] = JSON.parse(sort);
+
+            const buildQuery = (field, order) => `
+                SELECT
+                    p.id,
+                    p.name,
+                    p.price,
+                    p.description,
+                    p.weight,
+                    p.proteins,
+                    p.fats,
+                    p.carbohydrates,
+                    p.calorie,
+                    GROUP_CONCAT(i.img_path SEPARATOR ';') AS images,
+                    p.actually AS actually
+                FROM
+                    product AS p
+                LEFT OUTER JOIN
+                    image AS i
+                ON
+                    p.id = i.product_id
+                GROUP BY
+                    p.id
+                ORDER BY
+                    ${field} ${order}
+                LIMIT ?, ?;
+            `;
+
             const connection = await mysql.createConnection(CONFIG);
-            const querie = Q.get_products;
+            const [totalRows] = await connection.execute('SELECT COUNT(*) AS total FROM product');
+            const total = totalRows[0].total;
+
+            const query = buildQuery(field, order);
+            const [data] = await connection.execute(query, [parseInt(start), parseInt(end) - parseInt(start) + 1]);
+            const transformedData = dataTransform(data);
+
+            res.setHeader('Content-Range', `products ${start}-${end - 1}/${total}`);
+            res.status(200).json(transformedData);
+            await connection.end();
+        } catch(e) {
+            console.error('error: ', e);
+            if (e.code === 'ECONNREFUSED') {
+                next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, закройте приложение и попробуйте еще раз.'));
+            }
+            next(ApiError.notFound('Что-то пошло не так. Страница не найдена.'));
+        }
+    }
+
+    async getActually (req, res, next) {
+        try {
+            const connection = await mysql.createConnection(CONFIG);
+            const querie = Q.get_actually_products;
             const [data] = await connection.execute(querie);
-            res.status(200).json(data);
+            const transformedData = dataTransform(data);
+            res.status(200).json(transformedData);
             await connection.end();
         } catch(e) {
             console.error('error: ', e);
@@ -26,7 +91,9 @@ class ProductController {
             const connection = await mysql.createConnection(CONFIG);
             const querie = Q.get_one_product;
             const [data] = await connection.execute(querie, [id]);
-            res.status(200).json(data);
+            const transformedData = dataTransform(data);
+
+            res.status(200).json(transformedData);
             await connection.end();
         } catch(e) {
             console.error('error: ', e);
@@ -40,18 +107,93 @@ class ProductController {
     async uploadProduct(req, res, next) {
         try {
             const connection = await mysql.createConnection(CONFIG);
-            const { name, price, description, proteins, fats, carbohydrates, calorie, weight } = req.body;
+            const { name, price, actually, description, proteins, fats, carbohydrates, calorie, weight } = req.body;
 
-            const [results] = await connection.execute(Q.upload_product, [name, price, description, proteins, fats, carbohydrates, calorie, weight]);
-            const productId = results.insertId;
+            const [results] = await connection.execute(Q.upload_product, [
+                name, 
+                price, 
+                actually ? 1 : 0,
+                description ? description : null, 
+                proteins ? proteins : null, 
+                fats ? fats : null, 
+                carbohydrates ? carbohydrates : null, 
+                calorie ? calorie : null, 
+                weight ? weight : null
+            ]);
+            
+            const id = results.insertId;
 
-            // Вставляем изображения в таблицу product_images
-            const queryImage = 'INSERT INTO image (product_id, img_path) VALUES ?';
-            const imagePaths = req.files.map(file => [productId, `/uploads/${file.filename}`]);
+            const imagePaths = req.files?.map(file => [id, `/uploads/${file.filename}`]);
+            console.log('imagePaths', imagePaths)
+            if (imagePaths.length > 0) {
+                await connection.query(Q.set_product_img, [imagePaths]);
+            }
 
-            await connection.query(queryImage, [imagePaths]);
-            res.send('Product and images uploaded successfully!');
+            res.status(200).json({
+                id, name, price, description, proteins, fats, carbohydrates, calorie, weight, actually
+            })
             connection.end();
+        } catch (e) {
+            console.error('error: ', e);
+            next(ApiError.internal(e.message));
+        }
+    }
+
+    async updateProduct(req, res, next) {
+        try {
+            const connection = await mysql.createConnection(CONFIG);
+            const { id, name, price, description, proteins, fats, carbohydrates, calorie, weight, actually } = req.body;
+
+            const [productExists] = await connection.execute('SELECT COUNT(*) AS count FROM product WHERE id = ? ', [id]);
+            if (productExists[0].count === 0) {
+                return ApiError.notFound('Product is not found');
+            }
+
+            await connection.execute(Q.update_product, [
+                name, price, description, proteins, fats, carbohydrates, calorie, weight, actually === 'true' ? 1 : 0, id
+            ]);
+
+            if (req.files && req.files.length > 0) {
+                const imagePaths = req.files.map(file => [id, `/uploads/${file.filename}`]);
+
+                // Удаляем старые изображения перед добавлением новых
+                await connection.execute('DELETE FROM image WHERE product_id = ?', [id]);
+                await connection.query(Q.set_product_img, [imagePaths]);
+            }
+
+            res.status(200).json({
+                id, name, price, description, proteins, fats, carbohydrates, calorie, weight, actually
+            })
+            await connection.end();
+        } catch (e) {
+            console.error('error: ', e);
+            next(ApiError.internal(e.message));
+        }
+    }
+
+    async deleteOne(req, res, next) {
+        try {
+            const connection = await mysql.createConnection(CONFIG);
+            const id = +req.params.id;
+            const [data] = await connection.execute(Q.delete_product, [id]);
+
+            res.status(200).json(data);
+            await connection.end();
+        } catch (e) {
+            console.error('error: ', e);
+            next(ApiError.internal(e.message));
+        }
+    }
+
+    async deleteMany(req, res, next) {
+        try {
+            const connection = await mysql.createConnection(CONFIG);
+            const { filter } = req.query;
+            const ids = JSON.parse(filter).id;
+            const querie = `DELETE FROM product WHERE id IN (${ids.join(',')})`;
+            const [data] = await connection.execute(querie);
+            res.status(200).json({ data: ids });
+            await connection.end();
         } catch (e) {
             console.error('error: ', e);
             next(ApiError.internal(e.message));

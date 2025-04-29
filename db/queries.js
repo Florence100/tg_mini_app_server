@@ -1,10 +1,10 @@
 module.exports = {
-    get_products: `
+    get_actually_products: `
         SELECT
             p.id,
             p.name,
             p.price,
-            i.img_path AS img
+            GROUP_CONCAT(i.img_path SEPARATOR ';') AS images
         FROM
             product AS p
         LEFT OUTER JOIN
@@ -13,6 +13,7 @@ module.exports = {
             p.id = i.product_id
         WHERE
             p.actually = 1
+        GROUP BY p.id
     `,
 
     get_one_product: `
@@ -26,7 +27,8 @@ module.exports = {
             p.fats,
             p.carbohydrates,
             p.calorie,
-            i.img_path AS img
+            GROUP_CONCAT(i.img_path SEPARATOR ';') AS images,
+            p.actually AS actually
         FROM
             product AS p
         LEFT OUTER JOIN
@@ -35,6 +37,7 @@ module.exports = {
             p.id = i.product_id
         WHERE
             p.id = ?
+        GROUP BY p.id
     `,
 
     upload_product: `
@@ -42,6 +45,7 @@ module.exports = {
         (
             name,
             price,
+            actually,
             description,
             proteins,
             fats,
@@ -49,7 +53,38 @@ module.exports = {
             calorie,
             weight
         ) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+
+    update_product: `
+        UPDATE
+            product
+        SET
+            name = ?,
+            price = ?,
+            description = ?,
+            proteins = ?,
+            fats = ?,
+            carbohydrates = ?,
+            calorie = ?,
+            weight = ?,
+            actually = ?
+        WHERE
+            id = ?
+    `,
+
+    delete_product: `
+        DELETE FROM 
+            product 
+        WHERE 
+            product.id = ?
+    `,
+
+    set_product_img: `
+        INSERT INTO 
+            image (product_id, img_path) 
+        VALUES 
+            ?
     `,
 
     find_user: `
@@ -91,92 +126,18 @@ module.exports = {
             role_name = ?
     `,
 
-    // basket_create: `
-    //     INSERT INTO basket
-    //         (user_id)
-    //     VALUES(?)
-    // `,
-
-    // basket_find: `
-    //     SELECT
-    //         id
-    //     FROM
-    //         basket
-    //     WHERE
-    //         user_id = ?
-    //     limit 1
-    // `,
-
-    // basket_clear: `
-    //     DELETE FROM
-    //         basket_product
-    //     WHERE
-    //         basket_id = ?
-    // `,
-
-    // basket_product_add: `
-    //     INSERT INTO basket_product
-    //     (
-    //         basket_id,
-    //         product_id,
-    //         count
-    //     )
-    //     VALUES(?, ?, ?)
-    // `,
-
-    // basket_product_remove: `
-    //     DELETE FROM
-    //         basket_product
-    //     WHERE
-    //         basket_id = ?
-    //     AND
-    //         product_id = ?
-    // `,
-
-    // basket_product_incr: `
-    //     UPDATE
-    //         basket_product
-    //     SET
-    //         count = count + 1
-    //     WHERE
-    //         basket_id = ?
-    //     AND
-    //         product_id = ?
-    // `,
-
-    // basket_product_decr: `
-    //     UPDATE
-    //         basket_product
-    //     SET
-    //         count = count - 1
-    //     WHERE
-    //         basket_id = ?
-    //     AND
-    //         product_id = ?
-    // `,
-
-    // basket_product_get: `
-    //     SELECT 
-    //         bp.product_id AS id, 
-    //         bp.count, 
-    //         p.name, 
-    //         p.price, 
-    //         i.img_path AS img
-    //     FROM 
-    //         basket_product AS bp 
-    //     LEFT OUTER JOIN 
-    //         product AS p 
-    //     ON 
-    //         p.id = bp.product_id 
-    //     LEFT OUTER JOIN 
-    //         image AS i 
-    //     ON 
-    //         i.product_id = p.id 
-    //     WHERE 
-    //         bp.basket_id = ?
-    //     AND 
-    //         p.actually = 1
-    // `,
+    get_user_roles: `
+        SELECT
+            r.role_name as name
+        FROM
+            user_role as ur
+        LEFT OUTER JOIN
+            role as r
+        ON
+            r.id = ur.role_id
+        WHERE 
+            user_id = ?
+    `,
 
     order_create: `
         INSERT INTO orders (
