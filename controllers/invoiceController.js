@@ -9,6 +9,142 @@ const providerToken = process.env.PROVIDER_TOKEN;
 const serverUrl = `https://${process.env.SERVER_URL}`;
 
 class InvoiceController {
+    async getList(req, res, next) {
+        try {
+            const { range } = req.query;
+            const [start, end] = JSON.parse(range);
+
+            const { sort } = req.query;
+            const [field, order] = JSON.parse(sort);
+
+            const { filter } = req.query;
+            const whereConditions = [];
+            const values = [];
+
+            if(filter) {
+                const filterObj = JSON.parse(filter);
+
+                for (const [key, value] of Object.entries(filterObj)) {
+                    if (key === 'status') {
+                        whereConditions.push(`i.status = ?`);
+                        values.push(value);
+                    } else if (key === 'created_at_gte') {
+                        whereConditions.push(`DATE(i.created_at) >= ?`);
+                        values.push(value);
+                    } else if (key === 'created_at_lte') {
+                        whereConditions.push(`DATE(i.created_at) <= ?`);
+                        values.push(value);
+                    } else if (key === 'created_at') {
+                        whereConditions.push(`DATE(i.created_at) = ?`);
+                        values.push(value);
+                    } else {
+                        whereConditions.push(`i.${key} = ?`);
+                        values.push(value);
+                    }
+                }
+            }
+
+            const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+            const connection = await mysql.createConnection(CONFIG);
+            const [totalRows] = await connection.execute('SELECT COUNT(*) AS total FROM invoice');
+            const total = totalRows[0].total;
+
+            const buildQuery = (field, order) => `
+                SELECT 
+                    i.id,
+                    i.order_id,
+                    i.status,
+                    i.created_at,
+                    i.total_amount,
+                    u.id AS user_id
+                FROM 
+                    invoice i
+                LEFT JOIN orders o ON o.id = i.order_id
+                LEFT JOIN user u ON u.id = o.user_id
+                ${whereClause}
+                ORDER BY
+                    ${field} ${order}
+                LIMIT ?, ?;
+            `;
+
+            values.push(parseInt(start), parseInt(end) - parseInt(start) + 1);
+
+            const query = buildQuery(field, order);
+            const [data] = await connection.execute(query, values);
+            res.setHeader('Content-Range', `invoices ${start}-${end - 1}/${total}`);
+            res.status(200).json(data);
+            await connection.end();
+        } catch (e) {
+            console.error('error: ', e);
+            if (e.code === 'ECONNREFUSED') {
+                next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, попробуйте оформить заказ еще раз.'));
+            }
+            next(ApiError.unavailable('Сервер не готов обработать запрос в данный момент. Пожалуйста, попробуйте оформить заказ еще раз.'));
+        }
+    }
+
+    async getOne(req, res, next) {
+        try {
+            const id = +req.params.id;
+            const connection = await mysql.createConnection(CONFIG);
+            const query = `
+                SELECT 
+                    i.id,
+                    i.order_id,
+                    i.status,
+                    i.created_at,
+                    i.total_amount,
+                    u.id AS user_id
+                FROM 
+                    invoice i
+                LEFT JOIN orders o ON o.id = i.order_id
+                LEFT JOIN user u ON u.id = o.user_id
+                WHERE i.order_id = ?
+            `;
+            const [data] = await connection.execute(query, [id]);
+            res.status(200).json(data[0]);
+        } catch (e) {
+            console.error('error: ', e);
+            if (e.code === 'ECONNREFUSED') {
+                next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, попробуйте оформить заказ еще раз.'));
+            }
+            next(ApiError.unavailable('Сервер не готов обработать запрос в данный момент. Пожалуйста, попробуйте оформить заказ еще раз.'));
+        }
+    }
+
+    async getMany(req, res, next) {
+        try {
+            const { ids } = req.query;
+            const parsedIds = ids.split(',').map((item) => Number(item));
+
+            const query = `
+                SELECT 
+                    i.id,
+                    i.order_id,
+                    i.status,
+                    i.created_at,
+                    i.total_amount,
+                    u.id AS user_id
+                FROM 
+                    invoice i
+                LEFT JOIN orders o ON o.id = i.order_id
+                LEFT JOIN user u ON u.id = o.user_id
+                WHERE i.order_id IN (${parsedIds.join(',')})
+            `;
+
+            const connection = await mysql.createConnection(CONFIG);
+            const [data] = await connection.execute(query);
+            res.status(200).json(data);
+        } catch (e) {
+            console.error('error: ', e);
+            if (e.code === 'ECONNREFUSED') {
+                next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, попробуйте оформить заказ еще раз.'));
+            }
+            next(ApiError.unavailable('Сервер не готов обработать запрос в данный момент. Пожалуйста, попробуйте оформить заказ еще раз.'));
+        }
+    }
+
     async create(req, res, next) {
         const initData = getInitData(res);
         const userId = initData.user.id;
@@ -22,25 +158,30 @@ class InvoiceController {
 
             const pricesData = orderProducts.map(product => ({
                 label  : `${product.name} × ${product.count}`,
-                amount : +(product.price * product.count * 100).toFixed(2),
+                amount : Math.round(product.price * product.count),
             }))
 
             if (deliveryOption === 'delivery') {
                 pricesData.push(
                     {
                         label : 'Доставка курьером',
-                        amount: deliveryCost === 0 ? 0 : +(deliveryCost * 100).toFixed(2)
+                        amount: deliveryCost === 0 ? 0 : Math.round(deliveryCost)
                     }
                 );
             }
 
+            const totalAmount = pricesData.reduce(function (result, curValue) {
+                return result + curValue.amount;
+            }, 0)
+
             const currentDate = Date.now();
-            const invoiceId = `${userId}-${currentDate}`;
+            const payload = `${userId}-${currentDate}`;
+            // const invoiceId = `${userId}-${currentDate}`;
 
             const invoiceLink = await bot.createInvoiceLink(
                 'Данные тестовой карты:', //title
                 '6390 0200 0000 000003 \nСрок действия 2024/12 CVC 123 \nКод 3-D Secure 12345678 ', //description
-                invoiceId, //payload
+                payload,
                 providerToken,
                 'RUB',
                 pricesData,
@@ -52,7 +193,8 @@ class InvoiceController {
             );
 
             const slug = invoiceLink.split('/').pop().replace('$', '');
-            await connection.execute(Q.invoice_create, [orderId, slug, 'pending']);
+            const invoiceId = orderId;
+            await connection.execute(Q.invoice_create, [invoiceId, orderId, slug, totalAmount, 'pending']);
             res.status(200).json({ invoiceLink });
         } catch (e) {
             console.error('error: ', e);

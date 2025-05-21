@@ -8,7 +8,6 @@ const bot = new TelegramBot(BOT_TOKEN, {polling: true});
 console.log('Bot is working');
 
 bot.on('message', async (message) => {
-    console.log('message', message);
     const chatId = message.chat.id;
     const text = message.text;
 
@@ -32,7 +31,7 @@ bot.on('message', async (message) => {
     }
 })
 
-bot.on('pre_checkout_query', (query) => {
+bot.on('pre_checkout_query', (query) => {bot
     bot.answerPreCheckoutQuery(query.id, true)
         .then(() => {
             console.log('Pre-checkout query confirmed');

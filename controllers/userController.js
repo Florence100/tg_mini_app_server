@@ -43,7 +43,6 @@ class UserController {
             const roles = rolesRows.map((role) => role.name);
 
             await connection.end();
-            // res.status(200).json(userData);
             res.status(200).json({...initData, roles});
         } catch (e) {
             console.error('AuthError: ', e);
@@ -51,35 +50,125 @@ class UserController {
         }
     }
 
-    async getUsers (req, res, next) {
+    async getList (req, res, next) {
         try {
             const { range } = req.query;
             const [start, end] = JSON.parse(range);
 
             const { sort } = req.query;
             const [field, order] = JSON.parse(sort);
-            console.log(JSON.parse(sort));
 
-            const buildQuery = (field, order) => `
-                SELECT
-                    *
-                FROM
-                    user
-                ORDER BY
-                    ${field} ${order}
-                LIMIT ?, ?;
-            `;
+            const { filter } = req.query;
+            const whereConditions = [];
+            const values = [];
+
+            if(filter) {
+                const filterObj = JSON.parse(filter);
+                for (const [key, value] of Object.entries(filterObj)) {
+                    if (key === 'q') {
+                        const likeValue = `%${value}%`;
+                        whereConditions.push(`(
+                            u.id LIKE ? OR
+                            u.first_name LIKE ? OR
+                            u.user_name LIKE ? OR
+                            u.last_name LIKE ?
+                        )`);
+                        values.push(likeValue, likeValue, likeValue, likeValue);
+                    } else if (key === 'id') {
+                        whereConditions.push(`u.id LIKE ?`);
+                        values.push(`%${value}%`);
+                    } else if (key === 'created_at_gte') {
+                        whereConditions.push(`DATE(u.created_at) >= ?`);
+                        values.push(value);
+                    } else if (key === 'created_at_lte') {
+                        whereConditions.push(`DATE(u.created_at) <= ?`);
+                        values.push(value);
+                    } else {
+                        whereConditions.push(`u.${key} LIKE ?`);
+                        values.push(`%${value}%`);
+                    }
+                }
+            }
+
+            const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
             const connection = await mysql.createConnection(CONFIG);
             const [totalRows] = await connection.execute('SELECT COUNT(*) AS total FROM user');
             const total = totalRows[0].total;
 
-            const query = buildQuery(field, order);
-            const [data] = await connection.execute(query, [parseInt(start), parseInt(end) - parseInt(start) + 1]);
-            res.setHeader('Content-Range', `products ${start}-${end - 1}/${total}`);
+            const query = `
+                SELECT
+                    u.id,
+                    u.first_name,
+                    u.user_name,
+                    u.last_name,
+                    u.photo_url,
+                    u.created_at
+                FROM
+                    user u
+                ${whereClause}
+                ORDER BY
+                    ${field} ${order}
+                LIMIT ?, ?;
+            `;
+
+            console.log(query);
+
+            values.push(parseInt(start), parseInt(end) - parseInt(start) + 1);
+
+            const [data] = await connection.execute(query, values);
+            res.setHeader('Content-Range', `user ${start}-${end - 1}/${total}`);
             res.status(200).json(data);
             await connection.end();
             
+        } catch (e) {
+            console.error('error: ', e);
+            if (e.code === 'ECONNREFUSED') {
+                next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, закройте приложение и попробуйте еще раз.'));
+            }
+            next(ApiError.notFound('Что-то пошло не так. Страница не найдена.'));
+        }
+    }
+
+    async getOne (req, res, next) {
+        try {
+            const id = +req.params.id;
+            const connection = await mysql.createConnection(CONFIG);
+            const querie = `
+                SELECT
+                    *
+                FROM
+                    user
+                WHERE
+                    id = ?
+            `;
+            const [data] = await connection.execute(querie, [id]);
+            res.status(200).json(data[0]);
+            await connection.end();
+        } catch (e) {
+            console.error('error: ', e);
+            if (e.code === 'ECONNREFUSED') {
+                next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, закройте приложение и попробуйте еще раз.'));
+            }
+            next(ApiError.notFound('Что-то пошло не так. Страница не найдена.'));
+        }
+    }
+
+    async getMany (req, res, next) {
+        try {
+            const { ids } = req.query;
+            const parsedIds = ids.split(',').map((item) => Number(item));
+            const querie = `
+                SELECT
+                    *
+                FROM
+                    user
+                WHERE
+                    id IN (${parsedIds.join(',')})
+            `;
+            const connection = await mysql.createConnection(CONFIG);
+            const [data] = await connection.execute(querie);
+            res.status(200).json(data);
         } catch (e) {
             console.error('error: ', e);
             if (e.code === 'ECONNREFUSED') {

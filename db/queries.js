@@ -139,6 +139,37 @@ module.exports = {
             user_id = ?
     `,
 
+    get_one_order: `
+        SELECT 
+            o.id, 
+            o.user_id, 
+            o.status, 
+            o.created_at, 
+            o.delivery, 
+            o.delivery_cost, 
+            o.ready_date, 
+            o.ready_time, 
+            o.address, 
+            o.comment, 
+            i.total_amount,
+            i.order_id,
+            CONCAT('[', GROUP_CONCAT(
+                CONCAT(
+                    '{ "product_id": "', op.product_id, '", ',
+                    '"name": "', op.name, '", ',
+                    '"count": "', op.count, '", ',
+                    '"price": "', op.price, '" }'
+                )
+            ), ']') AS products_info 
+        FROM 
+            orders o 
+        LEFT JOIN order_product op ON o.id = op.order_id
+        LEFT JOIN user u ON o.user_id = u.id 
+        LEFT JOIN invoice i ON i.order_id = op.order_id
+        WHERE o.id = ? 
+        GROUP BY o.id; 
+    `,
+
     order_create: `
         INSERT INTO orders (
             user_id,
@@ -162,6 +193,19 @@ module.exports = {
             orders
         SET
             status = ?
+        WHERE
+            id = ?
+    `,
+
+    order_update: `
+        UPDATE
+            orders
+        SET
+            status = ?,
+            ready_date = ?,
+            ready_time = ?,
+            address = ?,
+            comment = ?
         WHERE
             id = ?
     `,
@@ -212,11 +256,13 @@ module.exports = {
 
     invoice_create: `
         INSERT INTO invoice (
+            id,
             order_id,
             slug,
+            total_amount,
             status
         ) 
-        VALUES (?, ?, ?)
+        VALUES (?, ?, ?, ?, ?)
     `,
 
     invoice_status_update: `

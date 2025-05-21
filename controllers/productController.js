@@ -14,7 +14,7 @@ function dataTransform(data) {
 }
 
 class ProductController {
-    async getAll (req, res, next) {
+    async getList (req, res, next) {
         try {
             const { range } = req.query;
             const [start, end] = JSON.parse(range);
@@ -22,7 +22,37 @@ class ProductController {
             const { sort } = req.query;
             const [field, order] = JSON.parse(sort);
 
-            const buildQuery = (field, order) => `
+            const { filter } = req.query;
+            const whereConditions = [];
+            const values = [];
+
+            if (filter) {
+                const filterObj = JSON.parse(filter);
+                for (const [key, value] of Object.entries(filterObj)) {
+                    if (key === 'q') {
+                        const likeValue = `%${value}%`;
+                        whereConditions.push(`(
+                            p.id = ? OR
+                            p.name LIKE ?
+                        )`);
+                        values.push(value, likeValue);
+                    } else if (key === 'actually') {
+                        whereConditions.push(`p.actually = ?`);
+                        values.push(value);
+                    } else {
+                        whereConditions.push(`p.${key} LIKE ?`);
+                        values.push(`%${value}%`);
+                    }
+                }
+            }
+
+            const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+            const connection = await mysql.createConnection(CONFIG);
+            const [totalRows] = await connection.execute('SELECT COUNT(*) AS total FROM product');
+            const total = totalRows[0].total;
+
+            const query = `
                 SELECT
                     p.id,
                     p.name,
@@ -41,6 +71,7 @@ class ProductController {
                     image AS i
                 ON
                     p.id = i.product_id
+                ${whereClause}
                 GROUP BY
                     p.id
                 ORDER BY
@@ -48,12 +79,9 @@ class ProductController {
                 LIMIT ?, ?;
             `;
 
-            const connection = await mysql.createConnection(CONFIG);
-            const [totalRows] = await connection.execute('SELECT COUNT(*) AS total FROM product');
-            const total = totalRows[0].total;
+            values.push(parseInt(start), parseInt(end) - parseInt(start) + 1);
 
-            const query = buildQuery(field, order);
-            const [data] = await connection.execute(query, [parseInt(start), parseInt(end) - parseInt(start) + 1]);
+            const [data] = await connection.execute(query, values);
             const transformedData = dataTransform(data);
 
             res.setHeader('Content-Range', `products ${start}-${end - 1}/${total}`);
@@ -91,7 +119,7 @@ class ProductController {
             const connection = await mysql.createConnection(CONFIG);
             const querie = Q.get_one_product;
             const [data] = await connection.execute(querie, [id]);
-            const transformedData = dataTransform(data);
+            const transformedData = dataTransform(data)[0];
 
             res.status(200).json(transformedData);
             await connection.end();
@@ -104,15 +132,16 @@ class ProductController {
         }
     }
 
-    async uploadProduct(req, res, next) {
+    async create(req, res, next) {
         try {
             const connection = await mysql.createConnection(CONFIG);
             const { name, price, actually, description, proteins, fats, carbohydrates, calorie, weight } = req.body;
+            console.log(typeof actually)
 
             const [results] = await connection.execute(Q.upload_product, [
                 name, 
                 price, 
-                actually ? 1 : 0,
+                actually === 'true' ? 1 : 0,
                 description ? description : null, 
                 proteins ? proteins : null, 
                 fats ? fats : null, 
@@ -124,7 +153,6 @@ class ProductController {
             const id = results.insertId;
 
             const imagePaths = req.files?.map(file => [id, `/uploads/${file.filename}`]);
-            console.log('imagePaths', imagePaths)
             if (imagePaths.length > 0) {
                 await connection.query(Q.set_product_img, [imagePaths]);
             }
@@ -139,7 +167,7 @@ class ProductController {
         }
     }
 
-    async updateProduct(req, res, next) {
+    async update(req, res, next) {
         try {
             const connection = await mysql.createConnection(CONFIG);
             const { id, name, price, description, proteins, fats, carbohydrates, calorie, weight, actually } = req.body;
@@ -171,7 +199,7 @@ class ProductController {
         }
     }
 
-    async deleteOne(req, res, next) {
+    async delete(req, res, next) {
         try {
             const connection = await mysql.createConnection(CONFIG);
             const id = +req.params.id;
