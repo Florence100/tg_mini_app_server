@@ -1,5 +1,6 @@
 module.exports = {
-    get_actually_products: `
+    // product
+    product_get_actually: `
         SELECT
             p.id,
             p.name,
@@ -16,7 +17,7 @@ module.exports = {
         GROUP BY p.id
     `,
 
-    get_one_product: `
+    product_get_one: `
         SELECT
             p.id,
             p.name,
@@ -40,7 +41,7 @@ module.exports = {
         GROUP BY p.id
     `,
 
-    upload_product: `
+    product_create: `
         INSERT INTO product
         (
             name,
@@ -56,7 +57,7 @@ module.exports = {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
 
-    update_product: `
+    product_update: `
         UPDATE
             product
         SET
@@ -73,21 +74,22 @@ module.exports = {
             id = ?
     `,
 
-    delete_product: `
+    product_delete: `
         DELETE FROM 
             product 
         WHERE 
             product.id = ?
     `,
 
-    set_product_img: `
+    product_set_img: `
         INSERT INTO 
             image (product_id, img_path) 
         VALUES 
             ?
     `,
 
-    find_user: `
+    // user
+    user_find: `
         SELECT
             id
         FROM
@@ -96,7 +98,7 @@ module.exports = {
             id = ?
     `,
 
-    create_user: `
+    user_create: `
         INSERT INTO user
         (
             id,
@@ -108,25 +110,7 @@ module.exports = {
         VALUES (?, ?, ?, ?, ?)
     `,
 
-    assign_role: `
-        INSERT INTO user_role
-        (
-            user_id,
-            role_id
-        ) 
-        VALUES(?, ?)
-    `,
-
-    select_role: `
-        SELECT
-            id
-        FROM
-            role
-        WHERE
-            role_name = ?
-    `,
-
-    get_user_roles: `
+    user_get_roles: `
         SELECT
             r.role_name as name
         FROM
@@ -139,7 +123,8 @@ module.exports = {
             user_id = ?
     `,
 
-    get_one_order: `
+    // order
+    order_get_one: `
         SELECT 
             o.id, 
             o.user_id, 
@@ -188,7 +173,7 @@ module.exports = {
         WHERE id = ?
     `,
 
-    order_status_update: `
+    order_update_status: `
         UPDATE
             orders
         SET
@@ -210,7 +195,7 @@ module.exports = {
             id = ?
     `,
 
-    order_product_create: `
+    order_create_product: `
         INSERT INTO order_product (
             order_id,
             product_id,
@@ -221,7 +206,7 @@ module.exports = {
         VALUES ?
     `,
 
-    order_info_get: `
+    order_get_info: `
         SELECT
             o.delivery AS deliveryOption,
             o.delivery_cost AS deliveryCost,
@@ -235,7 +220,7 @@ module.exports = {
             o.id = ?
     `,
 
-    order_products_get: `
+    order_get_products: `
         SELECT
             op.count,
             p.name,
@@ -254,6 +239,7 @@ module.exports = {
             o.id = ?
     `,
 
+    // invoice
     invoice_create: `
         INSERT INTO invoice (
             id,
@@ -265,7 +251,7 @@ module.exports = {
         VALUES (?, ?, ?, ?, ?)
     `,
 
-    invoice_status_update: `
+    invoice_update_status: `
         UPDATE
             invoice
         SET

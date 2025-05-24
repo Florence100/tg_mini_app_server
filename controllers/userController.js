@@ -10,11 +10,11 @@ class UserController {
             const initData = getInitData(res);
             const userData = initData.user;
             const connection = await mysql.createConnection(CONFIG);
-            const [rows] = await connection.execute(Q.find_user, [userData.id]);
+            const [rows] = await connection.execute(Q.user_find, [userData.id]);
 
             if (rows.length === 0) {
                 await connection.execute(
-                    Q.create_user,
+                    Q.user_create,
                     [
                         userData.id,
                         userData.first_name,
@@ -24,20 +24,14 @@ class UserController {
                     ]
                 );
 
-                const [roleRows] = await connection.execute(
-                    Q.select_role,
-                    ['user']
-                );
-
+                const [roleRows] = await connection.execute(`SELECT id FROM role WHERE role_name = ?`, ['user']);
                 const roleId = roleRows[0].id;
-                await connection.execute(
-                    Q.assign_role,
-                    [userData.id, roleId]
-                );
+
+                await connection.execute(`INSERT INTO user_role (user_id, role_id) VALUES(?, ?)`, [userData.id, roleId]);
             }
 
             const [rolesRows] = await connection.execute(
-                Q.get_user_roles,
+                Q.user_get_roles,
                 [userData.id]
             )
             const roles = rolesRows.map((role) => role.name);
@@ -111,8 +105,6 @@ class UserController {
                     ${field} ${order}
                 LIMIT ?, ?;
             `;
-
-            console.log(query);
 
             values.push(parseInt(start), parseInt(end) - parseInt(start) + 1);
 

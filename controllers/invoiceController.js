@@ -152,8 +152,8 @@ class InvoiceController {
 
         try {
             const connection = await mysql.createConnection(CONFIG);
-            const [orderInfo] = await connection.execute(Q.order_info_get, [orderId]);
-            const [orderProducts] = await connection.execute(Q.order_products_get, [orderId]);
+            const [orderInfo] = await connection.execute(Q.order_get_info, [orderId]);
+            const [orderProducts] = await connection.execute(Q.order_get_products, [orderId]);
             const { deliveryOption, deliveryCost } = orderInfo[0];
 
             const pricesData = orderProducts.map(product => ({
@@ -218,7 +218,7 @@ class InvoiceController {
             const orderId = rows[0].orderId;
 
             if (status === 'paid') {
-                const [orderInfo] = await connection.execute(Q.order_info_get, [orderId]);
+                const [orderInfo] = await connection.execute(Q.order_get_info, [orderId]);
                 const { deliveryOption, readyDate, readyTime, address } = orderInfo[0];
                 const formattedDate = dateConvert(readyDate);
                 let messageToUser;
@@ -229,13 +229,13 @@ class InvoiceController {
                     messageToUser = `Оплата прошла успешно! Ваш чек здесь ⬆️\n\nВаш заказ будет доставлен ${formattedDate} по адресу ${address} в промежуток времени ${readyTime}  \nСпасибо, что выбираете нас!`;
                 }
 
-                await connection.execute(Q.invoice_status_update, [status, slug]);
-                await connection.execute(Q.order_status_update, [status, orderId]);
+                await connection.execute(Q.invoice_update_status, [status, slug]);
+                await connection.execute(Q.order_update_status, [status, orderId]);
                 bot.sendMessage(userId, messageToUser);
 
             } else if (status === 'failed' || status === 'cancelled') {
-                await connection.execute(Q.invoice_status_update, [status, slug]);
-                await connection.execute(Q.order_status_update, [status, orderId]);
+                await connection.execute(Q.invoice_update_status, [status, slug]);
+                await connection.execute(Q.order_update_status, [status, orderId]);
             }
         } catch (e) {
             console.error('error: ', e);

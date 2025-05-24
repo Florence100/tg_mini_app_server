@@ -19,7 +19,7 @@ bot.on('message', async (message) => {
                 parse_mode: 'HTML',
                 reply_markup: {
                     inline_keyboard: [
-                        [{text: 'Открыть', web_app: {url: WEB_APP_URL}}],
+                        [{text: 'Открыть каталог', web_app: {url: WEB_APP_URL}}],
                     ],
                 }
             }

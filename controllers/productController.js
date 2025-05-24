@@ -3,6 +3,7 @@ const CONFIG = require('../db/config');
 const Q = require('../db/queries');
 const ApiError = require('../error/ApiError');
 
+
 function dataTransform(data) {
     return data.map((product) => ({
         ...product,
@@ -14,6 +15,23 @@ function dataTransform(data) {
 }
 
 class ProductController {
+    async getActually (req, res, next) {
+        try {
+            const connection = await mysql.createConnection(CONFIG);
+            const querie = Q.product_get_actually;
+            const [data] = await connection.execute(querie);
+            const transformedData = dataTransform(data);
+            res.status(200).json(transformedData);
+            await connection.end();
+        } catch(e) {
+            console.error('error: ', e);
+            if (e.code === 'ECONNREFUSED') {
+                next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, закройте приложение и попробуйте еще раз.'));
+            }
+            next(ApiError.notFound('Что-то пошло не так. Страница не найдена.'));
+        }
+    }
+
     async getList (req, res, next) {
         try {
             const { range } = req.query;
@@ -47,10 +65,22 @@ class ProductController {
             }
 
             const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
-
             const connection = await mysql.createConnection(CONFIG);
-            const [totalRows] = await connection.execute('SELECT COUNT(*) AS total FROM product');
-            const total = totalRows[0].total;
+
+            const [totalRows] = await connection.execute(
+                `
+                    SELECT 
+                        COUNT(DISTINCT p.id) AS total
+                    FROM 
+                        product AS p
+                    LEFT JOIN 
+                        image AS i ON p.id = i.product_id
+                    ${whereClause}
+                `,
+                values
+            );
+
+            const total = totalRows[0].total || 0;
 
             const query = `
                 SELECT
@@ -68,9 +98,7 @@ class ProductController {
                 FROM
                     product AS p
                 LEFT OUTER JOIN
-                    image AS i
-                ON
-                    p.id = i.product_id
+                    image AS i ON p.id = i.product_id
                 ${whereClause}
                 GROUP BY
                     p.id
@@ -96,28 +124,11 @@ class ProductController {
         }
     }
 
-    async getActually (req, res, next) {
-        try {
-            const connection = await mysql.createConnection(CONFIG);
-            const querie = Q.get_actually_products;
-            const [data] = await connection.execute(querie);
-            const transformedData = dataTransform(data);
-            res.status(200).json(transformedData);
-            await connection.end();
-        } catch(e) {
-            console.error('error: ', e);
-            if (e.code === 'ECONNREFUSED') {
-                next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, закройте приложение и попробуйте еще раз.'));
-            }
-            next(ApiError.notFound('Что-то пошло не так. Страница не найдена.'));
-        }
-    }
-
     async getOne (req, res, next) {
         try {
             const id = +req.params.id;
             const connection = await mysql.createConnection(CONFIG);
-            const querie = Q.get_one_product;
+            const querie = Q.product_get_one;
             const [data] = await connection.execute(querie, [id]);
             const transformedData = dataTransform(data)[0];
 
@@ -136,9 +147,8 @@ class ProductController {
         try {
             const connection = await mysql.createConnection(CONFIG);
             const { name, price, actually, description, proteins, fats, carbohydrates, calorie, weight } = req.body;
-            console.log(typeof actually)
 
-            const [results] = await connection.execute(Q.upload_product, [
+            const [results] = await connection.execute(Q.product_create, [
                 name, 
                 price, 
                 actually === 'true' ? 1 : 0,
@@ -154,7 +164,7 @@ class ProductController {
 
             const imagePaths = req.files?.map(file => [id, `/uploads/${file.filename}`]);
             if (imagePaths.length > 0) {
-                await connection.query(Q.set_product_img, [imagePaths]);
+                await connection.query(Q.product_set_img, [imagePaths]);
             }
 
             res.status(200).json({
@@ -170,23 +180,39 @@ class ProductController {
     async update(req, res, next) {
         try {
             const connection = await mysql.createConnection(CONFIG);
-            const { id, name, price, description, proteins, fats, carbohydrates, calorie, weight, actually } = req.body;
+            const { id, name, price, description, proteins, fats, carbohydrates, calorie, weight, actually, oldImages } = req.body;
 
             const [productExists] = await connection.execute('SELECT COUNT(*) AS count FROM product WHERE id = ? ', [id]);
             if (productExists[0].count === 0) {
                 return ApiError.notFound('Product is not found');
             }
 
-            await connection.execute(Q.update_product, [
+            await connection.execute(Q.product_update, [
                 name, price, description, proteins, fats, carbohydrates, calorie, weight, actually === 'true' ? 1 : 0, id
             ]);
 
+            const paths = JSON.parse(oldImages).map((imgPath) => {
+                const url = new URL(imgPath);
+                return url.pathname;
+            })
+
+            // Удаление лишних изображений
+            if (paths.length > 0) {
+                const placeholders = paths.map(() => '?').join(', ');
+                await connection.execute(
+                    `DELETE FROM image WHERE product_id = ? AND img_path NOT IN (${placeholders})`,
+                    [id, ...paths]
+                );
+            } else {
+                await connection.execute(
+                    `DELETE FROM image WHERE product_id = ?`,
+                    [id]
+                );
+            }
+
             if (req.files && req.files.length > 0) {
                 const imagePaths = req.files.map(file => [id, `/uploads/${file.filename}`]);
-
-                // Удаляем старые изображения перед добавлением новых
-                await connection.execute('DELETE FROM image WHERE product_id = ?', [id]);
-                await connection.query(Q.set_product_img, [imagePaths]);
+                await connection.query(Q.product_set_img, [imagePaths]);
             }
 
             res.status(200).json({
@@ -203,7 +229,7 @@ class ProductController {
         try {
             const connection = await mysql.createConnection(CONFIG);
             const id = +req.params.id;
-            const [data] = await connection.execute(Q.delete_product, [id]);
+            const [data] = await connection.execute(Q.product_delete, [id]);
 
             res.status(200).json(data);
             await connection.end();

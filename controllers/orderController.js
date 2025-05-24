@@ -100,7 +100,7 @@ class OrderController {
         try {
             const id = +req.params.id;
             const connection = await mysql.createConnection(CONFIG);
-            const querie = Q.get_one_order;
+            const querie = Q.order_get_one;
             const [data] = await connection.execute(querie, [id]);
             res.status(200).json(data[0]);
         } catch (e) {
@@ -182,7 +182,7 @@ class OrderController {
                 item.count
             ]);
 
-            await connection.query(Q.order_product_create, [values]);
+            await connection.query(Q.order_create_product, [values]);
 
             res.status(200).json({ 
                 message: 'Order created successfully',
