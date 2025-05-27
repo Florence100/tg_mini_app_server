@@ -108,7 +108,7 @@ class ProductController {
             `;
 
             values.push(parseInt(start), parseInt(end) - parseInt(start) + 1);
-
+            
             const [data] = await connection.execute(query, values);
             const transformedData = dataTransform(data);
 
