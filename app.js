@@ -34,8 +34,6 @@ app.use(authMiddleware);
 app.use('/', router);
 
 app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', WEB_APP_URL);
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Range');
     next(ApiError.notFound('Страница не найдена.'));
 });
 
