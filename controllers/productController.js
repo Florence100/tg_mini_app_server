@@ -101,6 +101,8 @@ class ProductController {
 
             const total = totalRows[0].total;
 
+            const limit = parseInt(end) - parseInt(start) + 1;
+
             const query = `
                 SELECT
                     p.id,
@@ -123,10 +125,8 @@ class ProductController {
                     p.id
                 ORDER BY
                     ${field} ${order}
-                LIMIT ?, ?;
+                LIMIT ${parseInt(start)}, ${limit};
             `;
-
-            values.push(parseInt(start), parseInt(end) - parseInt(start) + 1);
 
             const [data] = await connection.execute(query, values);
             const transformedData = dataTransform(data);
@@ -137,7 +137,7 @@ class ProductController {
             console.error('GetList product error:', e);
             return next(e.code === 'ECONNREFUSED'
                 ? ApiError.internal('Сервер базы данных недоступен.')
-                : ApiError.notFound('Что-то пошло не так.'));
+                : ApiError.badRequest(e.message));
         } finally {
             if (connection) await connection.end();
         }
@@ -158,7 +158,7 @@ class ProductController {
             console.error('GetOne product error: ', e);
             return next(e.code === 'ECONNREFUSED'
                 ? ApiError.internal('Сервер базы данных недоступен.')
-                : ApiError.notFound('Что-то пошло не так.'));
+                : ApiError.badRequest(e.message));
         } finally {
             if (connection) await connection.end();
         }

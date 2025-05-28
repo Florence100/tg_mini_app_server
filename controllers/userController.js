@@ -115,6 +115,8 @@ class UserController {
             );
             const total = totalRows[0].total;
 
+            const limit = parseInt(end) - parseInt(start) + 1;
+
             const query = `
                 SELECT
                     u.id,
@@ -128,20 +130,17 @@ class UserController {
                 ${whereClause}
                 ORDER BY
                     ${field} ${order}
-                LIMIT ?, ?;
+                LIMIT ${parseInt(start)}, ${limit};
             `;
-
-            values.push(parseInt(start), parseInt(end) - parseInt(start) + 1);
 
             const [data] = await connection.execute(query, values);
             res.setHeader('Content-Range', `user ${start}-${end - 1}/${total}`);
             res.status(200).json(data);
         } catch (e) {
             console.error('GetList user error:', e);
-            if (e.code === 'ECONNREFUSED') {
-                return next(ApiError.internal('Соединение отклонено сервером.'));
-            }
-            return next(ApiError.badRequest(e.message));
+            return next(e.code === 'ECONNREFUSED'
+                ? ApiError.internal('Сервер базы данных недоступен.')
+                : ApiError.badRequest(e.message));
         } finally {
             if (connection) await connection.end();
         }
@@ -159,10 +158,9 @@ class UserController {
             res.status(200).json(data);
         } catch (e) {
             console.error('GetOne user error: ', e);
-            if (e.code === 'ECONNREFUSED') {
-                return next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, закройте приложение и попробуйте еще раз.'));
-            }
-            return next(ApiError.notFound('Что-то пошло не так. Страница не найдена.'));
+            return next(e.code === 'ECONNREFUSED'
+                ? ApiError.internal('Сервер базы данных недоступен.')
+                : ApiError.badRequest(e.message));
         } finally {
             if (connection) await connection.end();
         }
@@ -192,10 +190,9 @@ class UserController {
             res.status(200).json(data);
         } catch (e) {
             console.error('GetMany user error: ', e);
-            if (e.code === 'ECONNREFUSED') {
-                return next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, закройте приложение и попробуйте еще раз.'));
-            }
-            return next(ApiError.notFound('Что-то пошло не так. Страница не найдена.'));
+            return next(e.code === 'ECONNREFUSED'
+                ? ApiError.internal('Сервер базы данных недоступен.')
+                : ApiError.badRequest(e.message));
         } finally {
             if (connection) await connection.end();
         }
