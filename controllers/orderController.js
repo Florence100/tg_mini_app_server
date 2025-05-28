@@ -69,6 +69,8 @@ class OrderController {
             );
             const total = totalRows[0].total;
 
+            const limit = parseInt(end) - parseInt(start) + 1;
+
             const query = `
                 SELECT 
                     o.id AS id, 
@@ -100,20 +102,17 @@ class OrderController {
                 GROUP BY o.id
                 ORDER BY
                     ${field} ${order}
-                LIMIT ?, ?;
+                LIMIT ${parseInt(start)}, ${limit};
             `;
-
-            values.push(parseInt(start), parseInt(end) - parseInt(start) + 1);
 
             const [data] = await connection.execute(query, values);
             res.setHeader('Content-Range', `orders ${start}-${end - 1}/${total}`);
             res.status(200).json(data);
         } catch (e) {
             console.error('GetList order error: ', e);
-            if (e.code === 'ECONNREFUSED') {
-                return next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, попробуйте оформить заказ еще раз.'));
-            }
-            return next(ApiError.unavailable('Сервер не готов обработать запрос в данный момент. Пожалуйста, попробуйте оформить заказ еще раз.'));
+            return next(e.code === 'ECONNREFUSED'
+                ? ApiError.internal('Сервер базы данных недоступен.')
+                : ApiError.badRequest(e.message));
         } finally {
             if (connection) await connection.end();
         }
@@ -132,10 +131,9 @@ class OrderController {
             res.status(200).json(data[0]);
         } catch (e) {
             console.error('GetOne order error: ', e);
-            if (e.code === 'ECONNREFUSED') {
-                return next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, попробуйте оформить заказ еще раз.'));
-            }
-            return next(ApiError.unavailable('Сервер не готов обработать запрос в данный момент. Пожалуйста, попробуйте оформить заказ еще раз.'));
+            return next(e.code === 'ECONNREFUSED'
+                ? ApiError.internal('Сервер базы данных недоступен.')
+                : ApiError.badRequest(e.message));
         } finally {
             if (connection) await connection.end();
         }
@@ -186,10 +184,9 @@ class OrderController {
             res.status(200).json(data);
         } catch (e) {
             console.error('GetMany order error: ', e);
-            if (e.code === 'ECONNREFUSED') {
-                return next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, попробуйте оформить заказ еще раз.'));
-            }
-            return next(ApiError.unavailable('Сервер не готов обработать запрос в данный момент. Пожалуйста, попробуйте оформить заказ еще раз.'));
+            return next(e.code === 'ECONNREFUSED'
+                ? ApiError.internal('Сервер базы данных недоступен.')
+                : ApiError.badRequest(e.message));
         } finally {
             if (connection) await connection.end();
         }
@@ -237,10 +234,9 @@ class OrderController {
             });
         } catch (e) {
             console.error('Create order error: ', e);
-            if (e.code === 'ECONNREFUSED') {
-                return next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, попробуйте оформить заказ еще раз.'));
-            }
-            return next(ApiError.unavailable('Сервер не готов обработать запрос в данный момент. Пожалуйста, попробуйте оформить заказ еще раз.'));
+            return next(e.code === 'ECONNREFUSED'
+                ? ApiError.internal('Сервер базы данных недоступен.')
+                : ApiError.badRequest(e.message));
         } finally {
             if (connection) await connection.end();
         }
@@ -263,10 +259,9 @@ class OrderController {
             res.status(200).json({ id, status, ready_date, ready_time, address, comment });
         } catch (e) {
             console.error('error: ', e);
-            if (e.code === 'ECONNREFUSED') {
-                return next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, попробуйте еще раз.'));
-            }
-            return next(ApiError.unavailable('Сервер не готов обработать запрос в данный момент. Пожалуйста, попробуйте еще раз.'));
+            return next(e.code === 'ECONNREFUSED'
+                ? ApiError.internal('Сервер базы данных недоступен.')
+                : ApiError.badRequest(e.message));
         } finally {
             if (connection) await connection.end();
         }
@@ -284,10 +279,9 @@ class OrderController {
             res.status(200).json(data);
         } catch (e) {
             console.error('Delete order error: ', e);
-            if (e.code === 'ECONNREFUSED') {
-                return next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, попробуйте еще раз.'));
-            }
-            return next(ApiError.unavailable('Сервер не готов обработать запрос в данный момент. Пожалуйста, попробуйте еще раз.'));
+            return next(e.code === 'ECONNREFUSED'
+                ? ApiError.internal('Сервер базы данных недоступен.')
+                : ApiError.badRequest(e.message));
         } finally {
             if (connection) await connection.end();
         }
@@ -308,10 +302,9 @@ class OrderController {
             res.status(200).json({ data: ids });
         } catch (e) {
             console.error('DeleteMany order error: ', e);
-            if (e.code === 'ECONNREFUSED') {
-                return next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, попробуйте оформить еще раз.'));
-            }
-            return next(ApiError.unavailable('Сервер не готов обработать запрос в данный момент. Пожалуйста, попробуйте оформить еще раз.'));
+            return next(e.code === 'ECONNREFUSED'
+                ? ApiError.internal('Сервер базы данных недоступен.')
+                : ApiError.badRequest(e.message));
         } finally {
             if (connection) await connection.end();
         }
