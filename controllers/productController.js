@@ -16,71 +16,91 @@ function dataTransform(data) {
 
 class ProductController {
     async getActually (req, res, next) {
+        let connection;
+
         try {
-            const connection = await mysql.createConnection(CONFIG);
-            const querie = Q.product_get_actually;
-            const [data] = await connection.execute(querie);
+            connection = await mysql.createConnection(CONFIG);
+            const [data] = await connection.execute(Q.product_get_actually);
             const transformedData = dataTransform(data);
             res.status(200).json(transformedData);
-            await connection.end();
         } catch(e) {
-            console.error('error: ', e);
+            console.error('GetActually product error: ', e);
             if (e.code === 'ECONNREFUSED') {
-                next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, закройте приложение и попробуйте еще раз.'));
+                return next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, закройте приложение и попробуйте еще раз.'));
             }
-            next(ApiError.notFound('Что-то пошло не так. Страница не найдена.'));
+            return next(ApiError.notFound('Что-то пошло не так. Страница не найдена.'));
+        } finally {
+            if (connection) await connection.end();
         }
     }
 
     async getList (req, res, next) {
+        let connection;
+
         try {
-            const { range } = req.query;
-            const [start, end] = JSON.parse(range);
+            const { 
+                range = '[0, 9]', 
+                sort = '["id", "ASC"]', 
+                filter = '{}' 
+            } = req.query;
 
-            const { sort } = req.query;
-            const [field, order] = JSON.parse(sort);
+            let start = 0, end = 9;
+            let field = 'id', order = 'ASC';
+            let filterObj = {};
 
-            const { filter } = req.query;
+            try {
+                [start, end] = JSON.parse(range);
+            } catch (err) {
+                console.warn('Invalid range param:', range);
+            }
+
+            try {
+                [field, order] = JSON.parse(sort);
+            } catch (err) {
+                console.warn('Invalid sort param:', sort);
+            }
+
+            try {
+                filterObj = JSON.parse(filter);
+            } catch (err) {
+                console.warn('Invalid filter param:', filter);
+            }
+
             const whereConditions = [];
             const values = [];
 
-            if (filter) {
-                const filterObj = JSON.parse(filter);
-                for (const [key, value] of Object.entries(filterObj)) {
-                    if (key === 'q') {
-                        const likeValue = `%${value}%`;
-                        whereConditions.push(`(
-                            p.id = ? OR
-                            p.name LIKE ?
-                        )`);
-                        values.push(value, likeValue);
-                    } else if (key === 'actually') {
-                        whereConditions.push(`p.actually = ?`);
-                        values.push(value);
-                    } else {
-                        whereConditions.push(`p.${key} LIKE ?`);
-                        values.push(`%${value}%`);
-                    }
+            for (const [key, value] of Object.entries(filterObj)) {
+                if (key === 'q') {
+                    const likeValue = `%${value}%`;
+                    whereConditions.push(`(
+                        p.id = ? OR
+                        p.name LIKE ?
+                    )`);
+                    values.push(value, likeValue);
+                } else if (key === 'actually') {
+                    whereConditions.push(`p.actually = ?`);
+                    values.push(value);
+                } else {
+                    whereConditions.push(`p.${key} LIKE ?`);
+                    values.push(`%${value}%`);
                 }
             }
 
             const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
-            const connection = await mysql.createConnection(CONFIG);
 
-            const [totalRows] = await connection.execute(
-                `
+            connection = await mysql.createConnection(CONFIG);
+
+            const [totalRows] = await connection.execute(`
                     SELECT 
                         COUNT(DISTINCT p.id) AS total
                     FROM 
-                        product AS p
-                    LEFT JOIN 
-                        image AS i ON p.id = i.product_id
+                        product p
+                    LEFT JOIN image i ON p.id = i.product_id
                     ${whereClause}
-                `,
-                values
+                `, values
             );
 
-            const total = totalRows[0].total || 0;
+            const total = totalRows[0].total;
 
             const query = `
                 SELECT
@@ -96,9 +116,9 @@ class ProductController {
                     GROUP_CONCAT(i.img_path SEPARATOR ';') AS images,
                     p.actually AS actually
                 FROM
-                    product AS p
+                    product p
                 LEFT OUTER JOIN
-                    image AS i ON p.id = i.product_id
+                    image i ON p.id = i.product_id
                 ${whereClause}
                 GROUP BY
                     p.id
@@ -108,46 +128,62 @@ class ProductController {
             `;
 
             values.push(parseInt(start), parseInt(end) - parseInt(start) + 1);
-            
+
             const [data] = await connection.execute(query, values);
             const transformedData = dataTransform(data);
 
             res.setHeader('Content-Range', `products ${start}-${end - 1}/${total}`);
             res.status(200).json(transformedData);
-            await connection.end();
         } catch(e) {
-            console.error('error: ', e);
+            console.error('GetList product error:', e);
             if (e.code === 'ECONNREFUSED') {
-                next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, закройте приложение и попробуйте еще раз.'));
+                return next(ApiError.internal('Соединение отклонено сервером.'));
             }
-            next(ApiError.notFound('Что-то пошло не так. Страница не найдена.'));
+            return next(ApiError.badRequest(e.message));
+        } finally {
+            if (connection) await connection.end();
         }
     }
 
     async getOne (req, res, next) {
+        let connection;
+
         try {
             const id = +req.params.id;
-            const connection = await mysql.createConnection(CONFIG);
-            const querie = Q.product_get_one;
-            const [data] = await connection.execute(querie, [id]);
-            const transformedData = dataTransform(data)[0];
+            if (!id) return next(ApiError.badRequest('Missing id parameter'));
 
-            res.status(200).json(transformedData);
-            await connection.end();
+            connection = await mysql.createConnection(CONFIG);
+            const [data] = await connection.execute(Q.product_get_one, [id]);
+
+            res.status(200).json(dataTransform(data)[0]);
         } catch(e) {
-            console.error('error: ', e);
+            console.error('GetOne product error: ', e);
             if (e.code === 'ECONNREFUSED') {
-                next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, закройте приложение и попробуйте еще раз.'));
+                return next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, закройте приложение и попробуйте еще раз.'));
             }
-            next(ApiError.notFound('Что-то пошло не так. Страница не найдена.'));
+            return next(ApiError.notFound('Что-то пошло не так. Страница не найдена.'));
+        } finally {
+            if (connection) await connection.end();
         }
     }
 
     async create(req, res, next) {
-        try {
-            const connection = await mysql.createConnection(CONFIG);
-            const { name, price, actually, description, proteins, fats, carbohydrates, calorie, weight } = req.body;
+        let connection;
 
+        try {
+            const { 
+                name, 
+                price, 
+                actually, 
+                description, 
+                proteins, 
+                fats, 
+                carbohydrates, 
+                calorie, 
+                weight 
+            } = req.body;
+
+            connection = await mysql.createConnection(CONFIG);
             const [results] = await connection.execute(Q.product_create, [
                 name, 
                 price, 
@@ -170,38 +206,45 @@ class ProductController {
             res.status(200).json({
                 id, name, price, description, proteins, fats, carbohydrates, calorie, weight, actually
             })
-            connection.end();
         } catch (e) {
-            console.error('error: ', e);
-            next(ApiError.internal(e.message));
+            console.error('Create product error: ', e);
+            return next(ApiError.internal(e.message));
+        } finally {
+            if (connection) await connection.end();
         }
     }
 
     async update(req, res, next) {
-        try {
-            const connection = await mysql.createConnection(CONFIG);
-            const { id, name, price, description, proteins, fats, carbohydrates, calorie, weight, actually, oldImages } = req.body;
+        let connection;
 
+        try {
+            const { 
+                id, name, price, description, proteins, fats, 
+                carbohydrates, calorie, weight, actually, oldImages 
+            } = req.body;
+
+            connection = await mysql.createConnection(CONFIG);
             const [productExists] = await connection.execute('SELECT COUNT(*) AS count FROM product WHERE id = ? ', [id]);
+            
             if (productExists[0].count === 0) {
                 return ApiError.notFound('Product is not found');
             }
 
             await connection.execute(Q.product_update, [
-                name, price, description, proteins, fats, carbohydrates, calorie, weight, actually === 'true' ? 1 : 0, id
+                name, price, description, proteins, fats, carbohydrates, 
+                calorie, weight, actually === 'true' ? 1 : 0, id
             ]);
 
-            const paths = JSON.parse(oldImages).map((imgPath) => {
-                const url = new URL(imgPath);
-                return url.pathname;
+            const oldPaths = JSON.parse(oldImages || []).map((img) => {
+                return new URL(img).pathname;
             })
 
             // Удаление лишних изображений
-            if (paths.length > 0) {
-                const placeholders = paths.map(() => '?').join(', ');
+            if (oldPaths.length) {
+                const placeholders = oldPaths.map(() => '?').join(', ');
                 await connection.execute(
                     `DELETE FROM image WHERE product_id = ? AND img_path NOT IN (${placeholders})`,
-                    [id, ...paths]
+                    [id, ...oldPaths]
                 );
             } else {
                 await connection.execute(
@@ -210,47 +253,59 @@ class ProductController {
                 );
             }
 
-            if (req.files && req.files.length > 0) {
+            if (req.files.length) {
                 const imagePaths = req.files.map(file => [id, `/uploads/${file.filename}`]);
                 await connection.query(Q.product_set_img, [imagePaths]);
             }
 
             res.status(200).json({
-                id, name, price, description, proteins, fats, carbohydrates, calorie, weight, actually
+                id, name, price, description, proteins, 
+                fats, carbohydrates, calorie, weight, actually
             })
-            await connection.end();
         } catch (e) {
-            console.error('error: ', e);
-            next(ApiError.internal(e.message));
+            console.error('Update product error: ', e);
+            return next(ApiError.internal(e.message));
+        } finally {
+            if (connection) await connection.end();
         }
     }
 
     async delete(req, res, next) {
-        try {
-            const connection = await mysql.createConnection(CONFIG);
-            const id = +req.params.id;
-            const [data] = await connection.execute(Q.product_delete, [id]);
+        let connection;
 
+        try {
+            const id = +req.params.id;
+            if (!id) return next(ApiError.badRequest('Missing id parameter'));
+
+            connection = await mysql.createConnection(CONFIG);
+            const [data] = await connection.execute(Q.product_delete, [id]);
             res.status(200).json(data);
-            await connection.end();
         } catch (e) {
-            console.error('error: ', e);
-            next(ApiError.internal(e.message));
+            console.error('Delete product error: ', e);
+            return next(ApiError.internal(e.message));
+        } finally {
+            if (connection) await connection.end();
         }
     }
 
     async deleteMany(req, res, next) {
+        let connection;
+
         try {
-            const connection = await mysql.createConnection(CONFIG);
-            const { filter } = req.query;
-            const ids = JSON.parse(filter).id;
-            const querie = `DELETE FROM product WHERE id IN (${ids.join(',')})`;
-            const [data] = await connection.execute(querie);
+            const { filter = '{}' } = req.query;
+            const ids = JSON.parse(filter).id || [];
+            if (!ids.length) return next(ApiError.badRequest('Нет ID для удаления.'));
+
+            connection = await mysql.createConnection(CONFIG);
+            const placeholders = ids.map(() => '?').join(', ');
+
+            await connection.execute(`DELETE FROM product WHERE id IN (${placeholders})`, ids);
             res.status(200).json({ data: ids });
-            await connection.end();
         } catch (e) {
-            console.error('error: ', e);
-            next(ApiError.internal(e.message));
+            console.error('DeleteMany product error: ', e);
+            return next(ApiError.internal(e.message));
+        } finally {
+            if (connection) await connection.end();
         }
     }
 }
