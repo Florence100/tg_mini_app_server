@@ -6,10 +6,12 @@ const { getInitData } = require('../middleware/authMiddleware');
 
 class UserController {
     async auth(req, res, next) {
+        let connection;
         try {
             const initData = getInitData(res);
             const userData = initData.user;
-            const connection = await mysql.createConnection(CONFIG);
+
+            connection = await mysql.createConnection(CONFIG);
             const [rows] = await connection.execute(Q.user_find, [userData.id]);
 
             if (rows.length === 0) {
@@ -24,10 +26,9 @@ class UserController {
                     ]
                 );
 
-                const [roleRows] = await connection.execute(`SELECT id FROM role WHERE role_name = ?`, ['user']);
-                const roleId = roleRows[0].id;
+                const [[roleRows]] = await connection.execute(`SELECT id FROM role WHERE role_name = ?`, ['user']);
 
-                await connection.execute(`INSERT INTO user_role (user_id, role_id) VALUES(?, ?)`, [userData.id, roleId]);
+                await connection.execute(`INSERT INTO user_role (user_id, role_id) VALUES(?, ?)`, [userData.id, roleRows.id]);
             }
 
             const [rolesRows] = await connection.execute(
@@ -36,58 +37,82 @@ class UserController {
             )
             const roles = rolesRows.map((role) => role.name);
 
-            await connection.end();
             res.status(200).json({...initData, roles});
         } catch (e) {
             console.error('AuthError: ', e);
-            next(ApiError.forbidden(e.message));
+            return next(ApiError.forbidden(e.message));
+        } finally {
+            if (connection) await connection.end();
         }
     }
 
-    async getList (req, res, next) {
+    async getList(req, res, next) {
+        let connection;
+
         try {
-            const { range } = req.query;
-            const [start, end] = JSON.parse(range);
+            const {
+                range = '[0, 9]',
+                sort = '["id", "ASC"]',
+                filter = '{}'
+            } = req.query;
 
-            const { sort } = req.query;
-            const [field, order] = JSON.parse(sort);
+            let start = 0, end = 9;
+            let field = 'id', order = 'ASC';
+            let filterObj = {};
 
-            const { filter } = req.query;
+            try { 
+                [start, end] = JSON.parse(range); 
+            } catch (e) { 
+                console.warn('Invalid range param:', range); 
+            }
+
+            try { 
+                [field, order] = JSON.parse(sort); 
+            } catch (e) { 
+                console.warn('Invalid sort param:', sort); 
+            }
+
+            try { 
+                filterObj = JSON.parse(filter); 
+            } catch (e) { 
+                console.warn('Invalid filter param:', filter); 
+            }
+
             const whereConditions = [];
             const values = [];
 
-            if(filter) {
-                const filterObj = JSON.parse(filter);
-                for (const [key, value] of Object.entries(filterObj)) {
-                    if (key === 'q') {
-                        const likeValue = `%${value}%`;
-                        whereConditions.push(`(
-                            u.id LIKE ? OR
-                            u.first_name LIKE ? OR
-                            u.user_name LIKE ? OR
-                            u.last_name LIKE ?
-                        )`);
-                        values.push(likeValue, likeValue, likeValue, likeValue);
-                    } else if (key === 'id') {
-                        whereConditions.push(`u.id LIKE ?`);
-                        values.push(`%${value}%`);
-                    } else if (key === 'created_at_gte') {
-                        whereConditions.push(`DATE(u.created_at) >= ?`);
-                        values.push(value);
-                    } else if (key === 'created_at_lte') {
-                        whereConditions.push(`DATE(u.created_at) <= ?`);
-                        values.push(value);
-                    } else {
-                        whereConditions.push(`u.${key} LIKE ?`);
-                        values.push(`%${value}%`);
-                    }
+            for (const [key, value] of Object.entries(filterObj)) {
+                if (key === 'q') {
+                    const like = `%${value}%`;
+                    whereConditions.push(`(
+                        u.id LIKE ? OR
+                        u.first_name LIKE ? OR
+                        u.user_name LIKE ? OR
+                        u.last_name LIKE ?
+                    )`);
+                    values.push(like, like, like, like);
+                } else if (key === 'id') {
+                    whereConditions.push(`u.id LIKE ?`);
+                    values.push(`%${value}%`);
+                } else if (key === 'created_at_gte') {
+                    whereConditions.push(`DATE(u.created_at) >= ?`);
+                    values.push(value);
+                } else if (key === 'created_at_lte') {
+                    whereConditions.push(`DATE(u.created_at) <= ?`);
+                    values.push(value);
+                } else {
+                    whereConditions.push(`u.${key} LIKE ?`);
+                    values.push(`%${value}%`);
                 }
             }
 
-            const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+            const whereClause = whereConditions.length ? `WHERE ${whereConditions.join(' AND ')}` : '';
+            connection = await mysql.createConnection(CONFIG);
 
-            const connection = await mysql.createConnection(CONFIG);
-            const [totalRows] = await connection.execute('SELECT COUNT(*) AS total FROM user');
+            const [totalRows] = await connection.execute(
+                `SELECT COUNT(*) AS total FROM user u ${whereClause}`,
+                values
+            );
             const total = totalRows[0].total;
 
             const query = `
@@ -111,62 +136,68 @@ class UserController {
             const [data] = await connection.execute(query, values);
             res.setHeader('Content-Range', `user ${start}-${end - 1}/${total}`);
             res.status(200).json(data);
-            await connection.end();
-            
         } catch (e) {
-            console.error('error: ', e);
+            console.error('GetList user error:', e);
             if (e.code === 'ECONNREFUSED') {
-                next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, закройте приложение и попробуйте еще раз.'));
+                return next(ApiError.internal('Соединение отклонено сервером.'));
             }
-            next(ApiError.notFound('Что-то пошло не так. Страница не найдена.'));
+            return next(ApiError.badRequest(e.message));
+        } finally {
+            if (connection) await connection.end();
         }
     }
 
     async getOne (req, res, next) {
+        let connection;
+
         try {
             const id = +req.params.id;
-            const connection = await mysql.createConnection(CONFIG);
-            const querie = `
-                SELECT
-                    *
-                FROM
-                    user
-                WHERE
-                    id = ?
-            `;
-            const [data] = await connection.execute(querie, [id]);
-            res.status(200).json(data[0]);
-            await connection.end();
+            if (!id) return next(ApiError.badRequest('Missing id parameter'));
+    
+            connection = await mysql.createConnection(CONFIG);
+            const [[data]] = await connection.execute(`SELECT * FROM user WHERE id = ?`, [id]);
+            res.status(200).json(data);
         } catch (e) {
-            console.error('error: ', e);
+            console.error('GetOne user error: ', e);
             if (e.code === 'ECONNREFUSED') {
-                next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, закройте приложение и попробуйте еще раз.'));
+                return next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, закройте приложение и попробуйте еще раз.'));
             }
-            next(ApiError.notFound('Что-то пошло не так. Страница не найдена.'));
+            return next(ApiError.notFound('Что-то пошло не так. Страница не найдена.'));
+        } finally {
+            if (connection) await connection.end();
         }
     }
 
     async getMany (req, res, next) {
+        let connection;
+
         try {
             const { ids } = req.query;
-            const parsedIds = ids.split(',').map((item) => Number(item));
-            const querie = `
-                SELECT
-                    *
-                FROM
-                    user
-                WHERE
-                    id IN (${parsedIds.join(',')})
-            `;
-            const connection = await mysql.createConnection(CONFIG);
-            const [data] = await connection.execute(querie);
+            if (!ids) return next(ApiError.badRequest('Missing ids parameter'));
+
+            const parsedIds = ids
+                .split(',')
+                .map((item) => Number(item))
+                .filter(id => !isNaN(id));
+            
+            if (!parsedIds.length) return next(ApiError.badRequest('Invalid ids'));
+
+            const placeholders = parsedIds.map(() => '?').join(',');
+
+            const query = `SELECT * FROM user WHERE id IN (${placeholders})`;
+
+            connection = await mysql.createConnection(CONFIG);
+            const [data] = await connection.execute(query, parsedIds);
+
             res.status(200).json(data);
         } catch (e) {
-            console.error('error: ', e);
+            console.error('GetMany user error: ', e);
             if (e.code === 'ECONNREFUSED') {
-                next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, закройте приложение и попробуйте еще раз.'));
+                return next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, закройте приложение и попробуйте еще раз.'));
             }
-            next(ApiError.notFound('Что-то пошло не так. Страница не найдена.'));
+            return next(ApiError.notFound('Что-то пошло не так. Страница не найдена.'));
+        } finally {
+            if (connection) await connection.end();
         }
     }
 }
