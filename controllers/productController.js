@@ -25,10 +25,9 @@ class ProductController {
             res.status(200).json(transformedData);
         } catch(e) {
             console.error('GetActually product error: ', e);
-            if (e.code === 'ECONNREFUSED') {
-                return next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, закройте приложение и попробуйте еще раз.'));
-            }
-            return next(ApiError.notFound('Что-то пошло не так. Страница не найдена.'));
+            return next(e.code === 'ECONNREFUSED'
+                ? ApiError.internal('Сервер базы данных недоступен.')
+                : ApiError.notFound('Что-то пошло не так.'));
         } finally {
             if (connection) await connection.end();
         }
@@ -136,10 +135,9 @@ class ProductController {
             res.status(200).json(transformedData);
         } catch(e) {
             console.error('GetList product error:', e);
-            if (e.code === 'ECONNREFUSED') {
-                return next(ApiError.internal('Соединение отклонено сервером.'));
-            }
-            return next(ApiError.badRequest(e.message));
+            return next(e.code === 'ECONNREFUSED'
+                ? ApiError.internal('Сервер базы данных недоступен.')
+                : ApiError.notFound('Что-то пошло не так.'));
         } finally {
             if (connection) await connection.end();
         }
@@ -158,10 +156,9 @@ class ProductController {
             res.status(200).json(dataTransform(data)[0]);
         } catch(e) {
             console.error('GetOne product error: ', e);
-            if (e.code === 'ECONNREFUSED') {
-                return next(ApiError.internal('Соединение отклонено сервером. Пожалуйста, закройте приложение и попробуйте еще раз.'));
-            }
-            return next(ApiError.notFound('Что-то пошло не так. Страница не найдена.'));
+            return next(e.code === 'ECONNREFUSED'
+                ? ApiError.internal('Сервер базы данных недоступен.')
+                : ApiError.notFound('Что-то пошло не так.'));
         } finally {
             if (connection) await connection.end();
         }
@@ -235,16 +232,23 @@ class ProductController {
                 calorie, weight, actually === 'true' ? 1 : 0, id
             ]);
 
-            const oldPaths = JSON.parse(oldImages || []).map((img) => {
-                return new URL(img).pathname;
-            })
+            let paths = [];
+            try {
+                const parsed = JSON.parse(oldImages || '[]');
+                paths = parsed.map((imgPath) => {
+                    const url = new URL(imgPath);
+                    return url.pathname;
+                });
+            } catch (err) {
+                console.warn('Invalid oldImages JSON:', oldImages);
+            }
 
             // Удаление лишних изображений
-            if (oldPaths.length) {
-                const placeholders = oldPaths.map(() => '?').join(', ');
+            if (paths.length > 0) {
+                const placeholders = paths.map(() => '?').join(', ');
                 await connection.execute(
                     `DELETE FROM image WHERE product_id = ? AND img_path NOT IN (${placeholders})`,
-                    [id, ...oldPaths]
+                    [id, ...paths]
                 );
             } else {
                 await connection.execute(
@@ -253,7 +257,7 @@ class ProductController {
                 );
             }
 
-            if (req.files.length) {
+            if (req.files?.length > 0) {
                 const imagePaths = req.files.map(file => [id, `/uploads/${file.filename}`]);
                 await connection.query(Q.product_set_img, [imagePaths]);
             }
