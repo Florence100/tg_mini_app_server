@@ -1,18 +1,18 @@
 # Telegram Mini App Server
 
-Backend часть fullstack-приложения для Telegram Mini Apps.  
-Сервер реализован на Node.js с использованием Express и MySQL.  
-Обеспечивает REST API, Telegram Bot-интеграцию и управление заказами.
+The backend component of a full-stack Telegram Mini App.  
+The server is built with Node.js, using Express and MySQL.  
+It provides a REST API, Telegram Bot integration, and order management.
 
 ---
 
-## Описание проекта
+## Project Description
 
-Серверная часть обрабатывает запросы клиентского приложения, управляет базой данных, обрабатывает платежи и взаимодействует с Telegram Bot API.  
+The server-side component processes client application requests, manages the database, handles payments, and interacts with the Telegram Bot API. 
 
 ---
 
-## Технологический стек
+## Technology stack
 
 - Node.js  
 - Express.js  
@@ -21,18 +21,18 @@ Backend часть fullstack-приложения для Telegram Mini Apps.
 
 ---
 
-## Основной функционал
+## Core functionality
 
-- CRUD-операции для заказов, товаров и пользователей  
-- REST API для клиентской части (React)  
-- Telegram Bot API (обработка команд, передача данных)    
-- Логирование и обработка ошибок  
+- CRUD operations for orders, products, and users  
+- REST API for the client-side (React)  
+- Telegram Bot API (command processing, data transmission)    
+- Logging and error handling
 
 ---
 
-## Настройка окружения
+## Environment setup
 
-Пример `.env` файла:
+Example `.env` file:
 
 ```bash
 BOT_TOKEN=your_telegram_bot_token
@@ -48,18 +48,18 @@ DB_NAME=telegram_app
 DB_PORT=3306
 ```
 
-## Как запустить проект
+## How to run a project
 
 ```bash
-# Клонировать репозиторий
+# Clone the repository
 git clone https://github.com/Florence100/tg_mini_app_server
 cd tg_mini_app_server
 ```
 
-# Установить зависимости
+# Install dependencies
 npm install
 
-# Создать .env и заполнить данные (см. выше)
+# Create a .env file and fill in the data (see above).
 
-# Запустить проект
+# Run the project
 npm run start
